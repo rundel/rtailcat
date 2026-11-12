@@ -6,6 +6,9 @@
 \alias{print.tailcat_secret}
 \alias{str.tailcat_secret}
 \alias{toString.tailcat_secret}
+\alias{format.tailcat_info}
+\alias{print.tailcat_info}
+\alias{str.tailcat_info}
 \title{Secret strings}
 \usage{
 \method{format}{tailcat_secret}(x, ...)
@@ -15,19 +18,25 @@
 \method{str}{tailcat_secret}(object, ...)
 
 \method{toString}{tailcat_secret}(x, ...)
+
+\method{format}{tailcat_info}(x, ...)
+
+\method{print}{tailcat_info}(x, ...)
+
+\method{str}{tailcat_info}(object, ...)
 }
 \arguments{
-\item{x, object}{A \code{tailcat_secret}.}
+\item{x, object}{A \code{tailcat_secret}, or the \code{tailcat_info} list returned by \code{TailcatServer$info()}.}
 
 \item{...}{Ignored.}
 }
 \value{
-\code{format()} and \code{toString()} return \code{"<redacted>"} for each element; \code{print()} and \code{str()} return their input invisibly.
+\code{format()} and \code{toString()} return \code{"<redacted>"} for each element of a secret; \code{format()} of a \code{tailcat_info} list returns a named character vector with its secrets redacted; \code{print()} and \code{str()} return their input invisibly.
 }
 \description{
 Tailcat addresses, private keys, and pre-shared keys are returned as character vectors with class \code{tailcat_secret}, so that printing them by accident does not reveal them. \code{TailcatServer$address}, the \code{address} element of \code{TailcatServer$info()}, the result of \code{\link[=tailcat_address_resolve]{tailcat_address_resolve()}}, and the \code{private_key} and \code{preshared_key} elements of \code{\link[=tailcat_keygen]{tailcat_keygen()}} are secrets.
 
-\code{print()}, \code{format()}, \code{str()}, and \code{toString()} show \verb{<redacted>} instead of the value, and so do printing and \code{str()} of a list that contains a secret. \code{format()} of a plain list that contains a secret redacts it in R 4.6.0 and later; earlier versions of R format list elements without consulting their class, so there it shows the value.
+\code{print()}, \code{format()}, \code{str()}, and \code{toString()} show \verb{<redacted>} instead of the value, and so do printing and \code{str()} of a list that contains a secret. \code{format()} of a plain list that contains a secret redacts it in R 4.6.0 and later; earlier versions of R format list elements without consulting their class, so there it shows the value. The list returned by \code{TailcatServer$info()} has class \code{tailcat_info} and the list returned by \code{\link[=tailcat_keygen]{tailcat_keygen()}} has class \code{tailcat_keys}, and both redact under \code{format()} in every version of R.
 
 Everything else sees the plain string: \code{as.character()}, \code{unclass()}, \code{paste()}, \code{paste0()}, \code{cat()}, \code{writeLines()}, \code{nchar()}, and \code{identical()} on the unclassed value. A secret can be passed directly wherever this package expects an address or key, such as \code{TailcatClient$new()} and \code{TailcatServer$new()}. Functions that drop attributes, such as \code{c()}, \code{unlist()}, and subsetting with \code{[}, return the plain string too.
 

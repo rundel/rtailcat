@@ -161,7 +161,7 @@ TailcatServer = R6::R6Class(
 
     #' @description Information about the started server.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
-    #' @return A list with `address` (a [tailcat_secret]), `ip` (the server's own IP address on the tailcat network, without a port), and `public_key`. Errors if the server has not started.
+    #' @return A list of class `tailcat_info` (so that `format()` redacts the address in every version of R) with `address` (a [tailcat_secret]), `ip` (the server's own IP address on the tailcat network, without a port), and `public_key`. Errors if the server has not started.
     info = function(timeout = 30) {
       timeout = check_timeout(timeout)
       server_info(private$check(rtc_info(private$handle, timeout, NULL), "get the server's information", timeout, invalid_headline = not_started))
@@ -281,7 +281,7 @@ not_started = "The server has not started; call `$start()` or `$listen()` first.
 server_info = function(json) {
   info = parse_info(json)
   names(info)[names(info) == "local_address"] = "ip"
-  info
+  structure(info, class = "tailcat_info")
 }
 
 listen_op = function(port) {

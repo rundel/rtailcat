@@ -79,6 +79,13 @@ test_that("a saved and reloaded server holds no address and is closed", {
   address = unclass(srv$address)
   expect_s3_class(srv$address, "tailcat_secret")
   expect_s3_class(srv$info()$address, "tailcat_secret")
+  info = srv$info()
+  expect_s3_class(info, "tailcat_info")
+  expect_named(format(info), names(info))
+  expect_identical(format(info)[["address"]], "<redacted>")
+  expect_identical(format(info)[["public_key"]], info$public_key)
+  expect_hidden(format(info), address)
+  expect_false(any(grepl("tailcat_info", utils::capture.output(print(info)), fixed = TRUE)))
   expect_hidden(c(every_display(srv$info()), every_display(srv$address), printed(srv)), address)
 
   for (field in as.list(srv)) {

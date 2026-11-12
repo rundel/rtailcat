@@ -272,7 +272,7 @@ srv$close()
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    A list with \code{address} (a \link{tailcat_secret}), \code{ip} (the server's own IP address on the tailcat network, without a port), and \code{public_key}. Errors if the server has not started.
+    A list of class \code{tailcat_info} (so that \code{format()} redacts the address in every version of R) with \code{address} (a \link{tailcat_secret}), \code{ip} (the server's own IP address on the tailcat network, without a port), and \code{public_key}. Errors if the server has not started.
   }
 }
 

@@ -141,22 +141,28 @@ test_that("an interrupt ends a blocking accept and leaves the listener usable", 
   child = child_r(c(
     "srv = TailcatServer$new(region = region)",
     "lst = srv$listen(0)",
-    "cat('READY\\\\n')",
+    "writeLines('READY')",
+    "flush(stdout())",
     "started = Sys.time()",
     "res = tryCatch({ lst$accept(); 'accepted' }, interrupt = function(e) 'interrupted')",
-    "cat('ACCEPT', res, round(as.double(Sys.time() - started, units = 'secs'), 1), '\\\\n')",
+    "writeLines(paste('ACCEPT', res, round(as.double(Sys.time() - started, units = 'secs'), 1)))",
     "res = tryCatch({ lst$accept(timeout = 0.2); 'accepted' }, tailcat_timeout = function(e) 'timeout')",
-    "cat('AFTER', res, '\\\\n')",
+    "writeLines(paste('AFTER', res))",
     "srv$close()"
   ))
   seen = wait_child_line(child, "^READY", timeout = 60)
-  expect_true(any(grepl("^READY", seen)))
+  if (!any(grepl("^READY", seen))) {
+    child$kill()
+    fail(paste(c("the child never reported READY; its standard error was:", child$read_all_error_lines()), collapse = "\n"))
+    return()
+  }
   Sys.sleep(0.5)
   child$interrupt()
   out = child_finish(child, timeout = 30)
   lines = c(seen, out$stdout)
   accept = grep("^ACCEPT", lines, value = TRUE)
   expect_length(accept, 1)
+  skip_if(length(accept) != 1, "no ACCEPT line to check")
   expect_match(accept, "^ACCEPT interrupted")
   expect_lt(as.double(sub("^ACCEPT interrupted ", "", accept)), 10)
   expect_true(any(grepl("^AFTER timeout", lines)))

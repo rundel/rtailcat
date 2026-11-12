@@ -13,9 +13,12 @@ are secrets.
 [`format()`](https://rdrr.io/r/base/format.html),
 [`str()`](https://rdrr.io/r/utils/str.html), and
 [`toString()`](https://rdrr.io/r/base/toString.html) show `<redacted>`
-instead of the value, and so do printing, formatting, and
+instead of the value, and so do printing and
 [`str()`](https://rdrr.io/r/utils/str.html) of a list that contains a
-secret.
+secret. [`format()`](https://rdrr.io/r/base/format.html) of a plain list
+that contains a secret redacts it in R 4.6.0 and later; earlier versions
+of R format list elements without consulting their class, so there it
+shows the value.
 
 Everything else sees the plain string:
 [`as.character()`](https://rdrr.io/r/base/character.html),
@@ -87,7 +90,7 @@ keys$private_key
 str(keys)
 #> List of 3 (class tailcat_keys)
 #>  $ private_key  : <tailcat_secret> <redacted> 
-#>  $ public_key   : chr "nodekey:0cb53183d68694d8ba0941a264999f79ee9395011f86fa7910c91faf6b38186c" 
+#>  $ public_key   : chr "nodekey:fb8fde634716ce893f5331183cf911089973aac5585a5f7aef1114b96604f123" 
 #>  $ preshared_key: <tailcat_secret> <redacted> 
 nchar(keys$private_key) > 0
 #> [1] TRUE

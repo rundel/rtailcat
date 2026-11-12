@@ -11,7 +11,13 @@ forked child (for example inside
 
 Useful links:
 
+- <https://rundel.github.io/rtailcat/>
+
+- <https://github.com/rundel/rtailcat>
+
 - <https://github.com/tailscale/tailcat>
+
+- Report bugs at <https://github.com/rundel/rtailcat/issues>
 
 ## Author
 

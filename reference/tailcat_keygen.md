@@ -44,9 +44,9 @@ can read.
 keys = tailcat_keygen()
 keys
 #> <tailcat_keys>
-#>   public_key:    nodekey:1501e5ce0fff4f956d1cf5845e925b9f7ea8108ba2c9cae2561c482277db0c38
+#>   public_key:    nodekey:6bbcec847f8faecd77121101d2d7599b6230c62dd764f0007a0f32297a5c5c68
 #>   private_key:   <redacted>
 #>   preshared_key: <redacted>
 keys$public_key
-#> [1] "nodekey:1501e5ce0fff4f956d1cf5845e925b9f7ea8108ba2c9cae2561c482277db0c38"
+#> [1] "nodekey:6bbcec847f8faecd77121101d2d7599b6230c62dd764f0007a0f32297a5c5c68"
 ```

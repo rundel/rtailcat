@@ -270,8 +270,11 @@ commit it, log it, or paste it into chats or issues. Addresses, private
 keys, and pre-shared keys are returned as `tailcat_secret` strings:
 [`print()`](https://rdrr.io/r/base/print.html),
 [`format()`](https://rdrr.io/r/base/format.html), and
-[`str()`](https://rdrr.io/r/utils/str.html) (also of lists that contain
-them) show `<redacted>`, while
+[`str()`](https://rdrr.io/r/utils/str.html) show `<redacted>`, as do
+[`print()`](https://rdrr.io/r/base/print.html) and
+[`str()`](https://rdrr.io/r/utils/str.html) of lists that contain them
+(and [`format()`](https://rdrr.io/r/base/format.html) of such lists from
+R 4.6.0), while
 [`writeLines()`](https://rdrr.io/r/base/writeLines.html),
 [`paste()`](https://rdrr.io/r/base/paste.html),
 [`as.character()`](https://rdrr.io/r/base/character.html), and the

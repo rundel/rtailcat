@@ -1,0 +1,177 @@
+#!/bin/sh
+# Locate a Go toolchain, check its version against src/go/go.mod, and write
+# src/Makevars from src/Makevars.in. Go is never downloaded by this script.
+
+GOMOD="src/go/go.mod"
+
+required=`sed -n 's/^go[ 	][ 	]*\([0-9][0-9.]*\).*$/\1/p' "$GOMOD" | head -n 1`
+if test -z "$required"; then
+  echo "ERROR: could not read the go version from $GOMOD" >&2
+  exit 1
+fi
+
+# Prints the absolute path of an executable given as a path (relative paths are
+# resolved here, because the make recipe runs go from another directory) or as
+# a command name on PATH.
+resolve_go() {
+  case $1 in
+    */*)
+      dir=`dirname "$1"`
+      dir=`cd "$dir" 2>/dev/null && pwd` || return 1
+      candidate="$dir/`basename "$1"`"
+      ;;
+    *)
+      candidate=`command -v "$1" 2>/dev/null` || return 1
+      ;;
+  esac
+  case $candidate in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  if test -f "$candidate" && test -x "$candidate"; then
+    echo "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+find_go() {
+  if test -n "$RTAILCAT_GO"; then
+    resolve_go "$RTAILCAT_GO"
+    return $?
+  fi
+  for candidate in go /usr/local/go/bin/go /opt/homebrew/bin/go /usr/local/bin/go "$HOME/go/bin/go"; do
+    if resolve_go "$candidate"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+GO=`find_go` || GO=""
+if test -z "$GO" && test -n "$RTAILCAT_GO"; then
+  cat >&2 <<EOF
+ERROR: RTAILCAT_GO is set to '$RTAILCAT_GO', but that is neither an executable
+file nor a command found on PATH. Set RTAILCAT_GO to the path of the go
+executable (or unset it to search PATH and common install locations), and
+reinstall.
+EOF
+  exit 1
+fi
+if test -z "$GO"; then
+  cat >&2 <<EOF
+ERROR: rtailcat needs the Go toolchain (Go >= $required) to build, but no 'go'
+executable was found. Install Go from https://go.dev/dl/ (or with your system
+package manager), then either put it on PATH or set RTAILCAT_GO to the path of
+the go executable, and reinstall.
+EOF
+  exit 1
+fi
+
+if test -z "$GOTOOLCHAIN"; then
+  GOTOOLCHAIN=local
+fi
+export GOTOOLCHAIN
+
+# The package's own go invocations ignore any go.work and the user's GOFLAGS
+# (a non-empty GOFLAGS also overrides one saved with `go env -w`).
+if test -d src/go/vendor; then
+  GOFLAGS=-mod=vendor
+else
+  GOFLAGS=-mod=readonly
+fi
+GOWORK=off
+export GOWORK GOFLAGS
+
+# Hermetic mode (vendored sources or RTAILCAT_HERMETIC=1): no go invocation may
+# write outside src/go/build, including Go telemetry state in the user config
+# dir, which Go writes even for `go env`/`go version`.
+if test -d src/go/vendor || test "$RTAILCAT_HERMETIC" = "1"; then
+  hermetic=yes
+  build_dir=`pwd`/src/go/build
+  mkdir -p "$build_dir/home/.config" "$build_dir/home/.cache"
+  HOME="$build_dir/home"
+  XDG_CONFIG_HOME="$build_dir/home/.config"
+  XDG_CACHE_HOME="$build_dir/home/.cache"
+  GOCACHE="$build_dir/gocache"
+  GOPATH="$build_dir/gopath"
+  GOMODCACHE="$build_dir/gopath/pkg/mod"
+  export HOME XDG_CONFIG_HOME XDG_CACHE_HOME GOCACHE GOPATH GOMODCACHE
+else
+  hermetic=no
+fi
+
+go_version_in() {
+  (cd "$1" && "$GO" env GOVERSION 2>/dev/null) | sed -n 's/^go\([0-9][0-9.]*\).*$/\1/p'
+}
+
+# Probing from src/go makes Go apply the module's go line, so with a
+# GOTOOLCHAIN that allows switching (for example auto) this reports the
+# toolchain the build will really use.
+found=`go_version_in src/go`
+local_found=`GOTOOLCHAIN=local go_version_in /`
+if test -z "$found"; then
+  if test -z "$local_found"; then
+    echo "ERROR: could not determine the version of Go at $GO" >&2
+    exit 1
+  fi
+  found=$local_found
+fi
+
+version_ok=`echo "$found $required" | awk '{
+  n = split($1, a, "."); m = split($2, b, ".");
+  for (i = 1; i <= 3; i++) {
+    x = (i <= n) ? a[i] + 0 : 0; y = (i <= m) ? b[i] + 0 : 0;
+    if (x > y) { print "yes"; exit } else if (x < y) { print "no"; exit }
+  }
+  print "yes"
+}'`
+if test "$version_ok" != "yes"; then
+  if test "$GOTOOLCHAIN" = "local"; then
+    cat >&2 <<EOF
+ERROR: rtailcat needs Go >= $required but $GO is Go $found.
+Install a newer Go from https://go.dev/dl/, or point RTAILCAT_GO at a newer go
+executable, and reinstall. Alternatively, set GOTOOLCHAIN=auto to let Go
+download the required toolchain itself (this script never downloads Go).
+EOF
+  else
+    cat >&2 <<EOF
+ERROR: rtailcat needs Go >= $required. $GO is Go $local_found, and with
+GOTOOLCHAIN=$GOTOOLCHAIN it did not switch to a new enough toolchain. Check the
+GOTOOLCHAIN value and network access, or install a newer Go from
+https://go.dev/dl/, and reinstall.
+EOF
+  fi
+  exit 1
+fi
+
+echo "rtailcat: using Go $found at $GO (GOTOOLCHAIN=$GOTOOLCHAIN, hermetic build: $hermetic)"
+if test -d src/go/vendor; then
+  echo "rtailcat: building from the vendored modules in src/go/vendor"
+else
+  echo "rtailcat: no src/go/vendor; Go will download the pinned modules (verified against go.sum)"
+fi
+
+case `uname -s` in
+  Darwin)
+    GO_PLATFORM_LIBS="-framework CoreFoundation -framework Security -framework IOKit -lresolv -Wl,-exported_symbol,_R_init_rtailcat"
+    ;;
+  Linux)
+    GO_PLATFORM_LIBS="-lresolv -lpthread -Wl,--version-script=rtailcat.map"
+    ;;
+  *)
+    GO_PLATFORM_LIBS="-lpthread"
+    ;;
+esac
+
+# Escapes the characters that are special in a sed replacement using |.
+sed_escape() {
+  printf '%s\n' "$1" | sed -e 's/[\\|&]/\\&/g'
+}
+
+sed -e "s|@GO@|`sed_escape "$GO"`|g" \
+    -e "s|@GOTOOLCHAIN@|`sed_escape "$GOTOOLCHAIN"`|g" \
+    -e "s|@GO_PLATFORM_LIBS@|`sed_escape "$GO_PLATFORM_LIBS"`|g" \
+    src/Makevars.in > src/Makevars
+
+exit 0

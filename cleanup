@@ -1,0 +1,5 @@
+#!/bin/sh
+rm -rf src/go/build
+rm -f src/Makevars src/*.o src/*.so src/*.dll src/symbols.rds
+rm -f config.log config.status
+exit 0

@@ -1,0 +1,48 @@
+rtailcat statically links the 'tailcat' Go library (module github.com/tailscale/tailcat, pinned by commit in src/go/go.mod) and the Go runtime and standard library into its shared object. The exact module versions and checksums are recorded in src/go/go.mod and src/go/go.sum. Each module's full license text is included in its source tree (for example in src/go/vendor/<module>/ after running tools/vendor.sh).
+
+tailcat, tailscale.com, and the tailcat C ABI header (tailcat.h)
+  Copyright (c) Tailscale Inc & contributors
+  BSD 3-Clause License
+
+Go runtime and standard library, golang.org/x/{crypto,exp,net,sync,sys,term,text,time}, github.com/google/go-cmp, github.com/go-json-experiment/json, github.com/kr/fs, github.com/klauspost/compress, filippo.io/edwards25519, github.com/hdevalence/ed25519consensus
+  Copyright The Go Authors and respective contributors
+  BSD 3-Clause License
+
+Other modules linked into the library, by license:
+
+| Module                                   | License      |
+| ---------------------------------------- | ------------ |
+| github.com/akutz/memconn                 | Apache-2.0   |
+| github.com/anmitsu/go-shlex              | MIT          |
+| github.com/coder/websocket               | ISC          |
+| github.com/creachadair/msync             | BSD-3-Clause |
+| github.com/creack/pty                    | MIT          |
+| github.com/dblohm7/wingoes               | BSD-3-Clause |
+| github.com/fxamacker/cbor/v2             | MIT          |
+| github.com/gaissmai/bart                 | MIT          |
+| github.com/godbus/dbus/v5                | BSD-2-Clause |
+| github.com/golang/groupcache             | Apache-2.0   |
+| github.com/google/btree                  | Apache-2.0   |
+| github.com/jsimonetti/rtnetlink          | MIT          |
+| github.com/mdlayher/netlink              | MIT          |
+| github.com/mdlayher/socket               | MIT          |
+| github.com/mitchellh/go-ps               | MIT          |
+| github.com/pires/go-proxyproto           | Apache-2.0   |
+| github.com/pkg/sftp                      | BSD-2-Clause |
+| github.com/safchain/ethtool              | Apache-2.0   |
+| github.com/tailscale/certstore           | MIT          |
+| github.com/tailscale/gliderssh           | BSD-3-Clause |
+| github.com/tailscale/go-winio            | MIT          |
+| github.com/tailscale/hujson              | BSD-3-Clause |
+| github.com/tailscale/peercred            | BSD-3-Clause |
+| github.com/tailscale/web-client-prebuilt | BSD-3-Clause |
+| github.com/tailscale/wireguard-go        | MIT          |
+| github.com/u-root/u-root                 | BSD-3-Clause |
+| github.com/x448/float16                  | MIT          |
+| go4.org/mem                              | Apache-2.0   |
+| go4.org/netipx                           | BSD-3-Clause |
+| golang.zx2c4.com/wintun                  | MIT          |
+| golang.zx2c4.com/wireguard/windows       | MIT          |
+| gvisor.dev/gvisor                        | Apache-2.0   |
+
+Not every module is linked on every platform; platform-specific modules (for example the Windows and Linux netlink packages) are only compiled where they apply.

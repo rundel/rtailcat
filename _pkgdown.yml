@@ -1,0 +1,36 @@
+url: https://rundel.github.io/rtailcat/
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: Servers and listeners
+    desc: Publish a secret address and accept TCP connections or UDP flows.
+    contents:
+      - TailcatServer
+      - TailcatListener
+  - title: Clients
+    desc: Dial a server by its address.
+    contents:
+      - TailcatClient
+  - title: Connections
+    desc: Read from and write to a TCP stream or UDP flow.
+    contents:
+      - TailcatConnection
+  - title: Cancellation
+    desc: Cancel a pending asynchronous operation.
+    contents:
+      - tailcat_cancel
+  - title: Keys and addresses
+    desc: Create keys and inspect or resolve addresses locally.
+    contents:
+      - tailcat_keygen
+      - tailcat_address_parse
+      - tailcat_address_resolve
+  - title: Secrets
+    desc: Redacted strings for addresses and keys.
+    contents:
+      - tailcat_secret
+  - title: Build information
+    contents:
+      - tailcat_build_info

@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+*.Rproj
+src/*.o
+src/*.so
+src/*.dll
+src/Makevars
+src/go/build/
+src/go/vendor/
+CLAUDE.local.md
+notes/

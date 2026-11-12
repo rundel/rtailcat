@@ -1,0 +1,59 @@
+# Best-effort Windows build with Rtools (MinGW-w64 gcc). Untested.
+GO = $(if $(RTAILCAT_GO),$(RTAILCAT_GO),go)
+GO_TOOLCHAIN = $(if $(GOTOOLCHAIN),$(GOTOOLCHAIN),local)
+GO_MOD = github.com/tailscale/tailcat
+GO_PKG = $(GO_MOD)/cmd/libtailcat
+GO_VENDORED = $(wildcard go/vendor/modules.txt)
+GO_MODFLAG = $(if $(GO_VENDORED),-mod=vendor,-mod=readonly)
+GO_LIB = go/build/libtailcat.a
+GO_HDR = go/build/tailcat.h
+
+# Hermetic mode (vendored sources or RTAILCAT_HERMETIC=1): keep every Go cache,
+# the module cache, and Go's config/telemetry state inside go/build.
+GO_HERMETIC = $(if $(or $(GO_VENDORED),$(filter 1,$(RTAILCAT_HERMETIC))),yes,)
+GO_BUILD_DIR = $(CURDIR)/go/build
+GO_HERMETIC_ENV = HOME="$(GO_BUILD_DIR)/home" USERPROFILE="$(GO_BUILD_DIR)/home" APPDATA="$(GO_BUILD_DIR)/home/.config" LOCALAPPDATA="$(GO_BUILD_DIR)/home/.cache" \
+  XDG_CONFIG_HOME="$(GO_BUILD_DIR)/home/.config" \
+  XDG_CACHE_HOME="$(GO_BUILD_DIR)/home/.cache" \
+  GOCACHE="$(GO_BUILD_DIR)/gocache" \
+  GOPATH="$(GO_BUILD_DIR)/gopath" \
+  GOMODCACHE="$(GO_BUILD_DIR)/gopath/pkg/mod" \
+  $(if $(GOMAXPROCS),,GOMAXPROCS=2)
+GO_ENV = $(if $(GO_HERMETIC),$(GO_HERMETIC_ENV),)
+GO_LIST_FLAGS = $(GO_MODFLAG) $(if $(GO_HERMETIC),-modcacherw,)
+GO_BUILD_FLAGS = $(GO_LIST_FLAGS) $(if $(GO_HERMETIC),$(if $(GOMAXPROCS),,-p 2),)
+
+CXX_STD = CXX17
+PKG_CPPFLAGS = -Igo/build
+PKG_LIBS = $(GO_LIB) -lws2_32 -liphlpapi -lwinmm -lntdll -luserenv -lbcrypt -ladvapi32 -lcrypt32 -lsecur32 -lole32 -loleaut32
+
+# A go.work in a parent directory, GOWORK, or the user's GOFLAGS (from the
+# environment or `go env -w`) must not change the build; a non-empty GOFLAGS
+# overrides both sources.
+GO_ISOLATION = GOWORK=off GOFLAGS="$(GO_MODFLAG)"
+
+.DELETE_ON_ERROR:
+
+all: $(SHLIB)
+
+$(SHLIB): $(GO_LIB)
+
+rtailcat.o: $(GO_HDR)
+
+$(GO_HDR): $(GO_LIB)
+	@test -f $@
+
+$(GO_LIB): go/go.mod go/go.sum $(GO_VENDORED)
+	@mkdir -p go/build/home/.config go/build/home/.cache
+	cd go && \
+	  export CGO_ENABLED=1 GOTOOLCHAIN="$(GO_TOOLCHAIN)" $(GO_ISOLATION) CC="$(CC)" $(GO_ENV) && \
+	  pkgdir=`"$(GO)" list $(GO_LIST_FLAGS) -f '{{.Dir}}' $(GO_PKG)` && \
+	  test -n "$$pkgdir" && \
+	  moddir=`"$(GO)" list -m $(GO_LIST_FLAGS) -f '{{.Dir}}' $(GO_MOD)` && \
+	  if test -z "$$moddir"; then moddir=vendor/$(GO_MOD); fi && \
+	  tags=`tr -d ' \r\n' < "$$moddir/build-tags.txt"` && \
+	  "$(GO)" build $(GO_BUILD_FLAGS) -buildmode=c-archive -trimpath -ldflags "-s -w" \
+	    -tags "$$tags" -o build/libtailcat.a $(GO_PKG) && \
+	  rm -f build/tailcat.h && cp "$$pkgdir/tailcat.h" build/tailcat.h && chmod u+w build/tailcat.h
+
+.PHONY: all

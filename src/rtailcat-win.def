@@ -1,0 +1,3 @@
+LIBRARY rtailcat.dll
+EXPORTS
+ R_init_rtailcat

@@ -1,0 +1,35 @@
+Package: rtailcat
+Title: Peer-to-Peer Network Connections with 'tailcat'
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Colin", "Rundel", , "cr173@duke.edu", role = c("aut", "cre")),
+    person("Tailscale Inc & contributors", role = "cph",
+           comment = "Author and copyright holder of the bundled, statically linked 'tailcat' Go library; see inst/COPYRIGHTS")
+  )
+Description: Embeds the 'tailcat' Go library <https://github.com/tailscale/tailcat> through its C ABI, providing both the server and client side of 'tailcat' connections from R. TCP streams and UDP datagrams are exchanged between peers through public relays without accounts, using a shareable secret address.
+License: BSD_3_clause + file LICENSE
+URL: https://rundel.github.io/rtailcat/, https://github.com/rundel/rtailcat, https://github.com/tailscale/tailcat
+BugReports: https://github.com/rundel/rtailcat/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.0.0)
+SystemRequirements: Go (>= 1.27.2), GNU make
+Imports:
+    cli (>= 3.4.0),
+    jsonlite,
+    later (>= 1.2.0),
+    promises,
+    R6 (>= 2.1.2),
+    rlang (>= 1.0.0)
+Suggests:
+    curl,
+    parallel,
+    processx,
+    testthat (>= 3.0.0),
+    withr
+LinkingTo:
+    cpp11 (>= 0.5.4),
+    later (>= 1.2.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.1

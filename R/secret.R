@@ -3,7 +3,7 @@
 #' @description
 #' Tailcat addresses, private keys, and pre-shared keys are returned as character vectors with class `tailcat_secret`, so that printing them by accident does not reveal them. `TailcatServer$address`, the `address` element of `TailcatServer$info()`, the result of [tailcat_address_resolve()], and the `private_key` and `preshared_key` elements of [tailcat_keygen()] are secrets.
 #'
-#' `print()`, `format()`, `str()`, and `toString()` show `<redacted>` instead of the value, and so do printing, formatting, and `str()` of a list that contains a secret.
+#' `print()`, `format()`, `str()`, and `toString()` show `<redacted>` instead of the value, and so do printing and `str()` of a list that contains a secret. `format()` of a plain list that contains a secret redacts it in R 4.6.0 and later; earlier versions of R format list elements without consulting their class, so there it shows the value.
 #'
 #' Everything else sees the plain string: `as.character()`, `unclass()`, `paste()`, `paste0()`, `cat()`, `writeLines()`, `nchar()`, and `identical()` on the unclassed value. A secret can be passed directly wherever this package expects an address or key, such as `TailcatClient$new()` and `TailcatServer$new()`. Functions that drop attributes, such as `c()`, `unlist()`, and subsetting with `[`, return the plain string too.
 #'

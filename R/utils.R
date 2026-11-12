@@ -185,3 +185,10 @@ max_operations_option = function() {
 is_tailcat_object = function(x, classes) {
   R6::is.R6(x) && inherits(x, classes)
 }
+
+# A latency that is a whole number of seconds (0 on a coarse clock) parses as an integer.
+parse_disco_ping = function(text) {
+  x = parse_json(text)
+  x$latency = as.double(x$latency)
+  x
+}

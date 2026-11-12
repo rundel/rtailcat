@@ -1,9 +1,11 @@
 # toString() of a list is paste(), which shows values like as.character().
+# Before R 4.6.0 format() of a plain list ignores the class of its elements, so it cannot redact.
 every_display = function(x) {
+  plain_list = is.list(x) && !is.object(x)
   c(
     utils::capture.output(print(x)),
     utils::capture.output(utils::str(x)),
-    if (!is.environment(x)) format(x),
+    if (!is.environment(x) && (!plain_list || getRversion() >= "4.6.0")) format(x),
     if (is.character(x)) toString(x)
   )
 }

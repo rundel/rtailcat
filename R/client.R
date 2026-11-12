@@ -93,7 +93,7 @@ TailcatClient = R6::R6Class(
     #' @return A list with `latency` (seconds), `endpoint` (the direct path, or `""` when relayed), `relay_region_id`, and `relay_region_code` (the relay region the ping went through).
     disco_ping = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      parse_json(private$check(rtc_client_disco_ping(private$handle, timeout, NULL), "send a discovery ping", timeout, hint = unanswered))
+      parse_disco_ping(private$check(rtc_client_disco_ping(private$handle, timeout, NULL), "send a discovery ping", timeout, hint = unanswered))
     },
 
     #' @description Asynchronous version of `$disco_ping()`.
@@ -101,7 +101,7 @@ TailcatClient = R6::R6Class(
     #' @return A promise resolving with the discovery ping list.
     disco_ping_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_client_disco_ping(private$handle, timeout, cb), parse_json, "send a discovery ping", timeout, hint = unanswered)
+      private$promise(function(cb) rtc_client_disco_ping(private$handle, timeout, cb), parse_disco_ping, "send a discovery ping", timeout, hint = unanswered)
     },
 
     #' @description Information about the client.

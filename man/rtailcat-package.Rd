@@ -11,7 +11,10 @@ The package statically links the 'tailcat' Go library, which embeds a Go runtime
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://rundel.github.io/rtailcat/}
+  \item \url{https://github.com/rundel/rtailcat}
   \item \url{https://github.com/tailscale/tailcat}
+  \item Report bugs at \url{https://github.com/rundel/rtailcat/issues}
 }
 
 }

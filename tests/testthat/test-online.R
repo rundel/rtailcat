@@ -247,6 +247,7 @@ test_that("ping and disco_ping report latency", {
   expect_setequal(names(dp), c("latency", "endpoint", "relay_region_id", "relay_region_code"))
   expect_type(dp$relay_region_id, "integer")
   expect_type(dp$latency, "double")
+  expect_type(rtailcat:::parse_disco_ping('{"latency":0,"endpoint":""}')$latency, "double")
   expect_type(dp$endpoint, "character")
   expect_named(wait_for(cl$disco_ping_async(timeout = 30), 40), names(dp), ignore.order = TRUE)
 })

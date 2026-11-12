@@ -27,7 +27,7 @@
 \description{
 Tailcat addresses, private keys, and pre-shared keys are returned as character vectors with class \code{tailcat_secret}, so that printing them by accident does not reveal them. \code{TailcatServer$address}, the \code{address} element of \code{TailcatServer$info()}, the result of \code{\link[=tailcat_address_resolve]{tailcat_address_resolve()}}, and the \code{private_key} and \code{preshared_key} elements of \code{\link[=tailcat_keygen]{tailcat_keygen()}} are secrets.
 
-\code{print()}, \code{format()}, \code{str()}, and \code{toString()} show \verb{<redacted>} instead of the value, and so do printing, formatting, and \code{str()} of a list that contains a secret.
+\code{print()}, \code{format()}, \code{str()}, and \code{toString()} show \verb{<redacted>} instead of the value, and so do printing and \code{str()} of a list that contains a secret. \code{format()} of a plain list that contains a secret redacts it in R 4.6.0 and later; earlier versions of R format list elements without consulting their class, so there it shows the value.
 
 Everything else sees the plain string: \code{as.character()}, \code{unclass()}, \code{paste()}, \code{paste0()}, \code{cat()}, \code{writeLines()}, \code{nchar()}, and \code{identical()} on the unclassed value. A secret can be passed directly wherever this package expects an address or key, such as \code{TailcatClient$new()} and \code{TailcatServer$new()}. Functions that drop attributes, such as \code{c()}, \code{unlist()}, and subsetting with \code{[}, return the plain string too.
 

@@ -389,7 +389,9 @@ Information about the started server.
 
 #### Returns
 
-A list with `address` (a
+A list of class `tailcat_info` (so that
+[`format()`](https://rdrr.io/r/base/format.html) redacts the address in
+every version of R) with `address` (a
 [tailcat_secret](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)),
 `ip` (the server's own IP address on the tailcat network, without a
 port), and `public_key`. Errors if the server has not started.

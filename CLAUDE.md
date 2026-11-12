@@ -109,6 +109,11 @@ Key native-layer rules:
   `print`, `format`, `str`, and `toString` methods redact. Validation
   (`check_string()`) strips the class with `reveal()`. No R field may
   hold a secret: `TailcatServer$address` calls `tc_info` each time.
+  Before R 4.6.0 [`format()`](https://rdrr.io/r/base/format.html) of a
+  plain list ignores its elements’ classes, so any list this package
+  returns that holds a secret must have its own class with a
+  [`format()`](https://rdrr.io/r/base/format.html) method
+  (`tailcat_keys`, and `tailcat_info` for `TailcatServer$info()`).
 - Nothing about a handle is cached in R (owner’s decision). Every
   metadata field (`$address`, `$public_key`, `$is_started`, `$port`,
   `$local_address`, `$remote_address`, `$network`) and `$info()` asks

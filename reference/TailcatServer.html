@@ -296,7 +296,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-6">Returns<a class="anchor" aria-label="anchor" href="#returns-6"></a></h4>
-<p>A list with <code>address</code> (a <a href="tailcat_secret.html">tailcat_secret</a>), <code>ip</code> (the server's own IP address on the tailcat network, without a port), and <code>public_key</code>. Errors if the server has not started.</p>
+<p>A list of class <code>tailcat_info</code> (so that <code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code> redacts the address in every version of R) with <code>address</code> (a <a href="tailcat_secret.html">tailcat_secret</a>), <code>ip</code> (the server's own IP address on the tailcat network, without a port), and <code>public_key</code>. Errors if the server has not started.</p>
 </div>
 
 </div>

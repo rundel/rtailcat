@@ -50,6 +50,9 @@ Redacted strings for addresses and keys.
   [`print(`*`<tailcat_secret>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
   [`str(`*`<tailcat_secret>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
   [`toString(`*`<tailcat_secret>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
+  [`format(`*`<tailcat_info>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
+  [`print(`*`<tailcat_info>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
+  [`str(`*`<tailcat_info>`*`)`](https://rundel.github.io/rtailcat/reference/tailcat_secret.md)
   : Secret strings
 
 ## Build information

@@ -273,8 +273,9 @@ keys, and pre-shared keys are returned as `tailcat_secret` strings:
 [`str()`](https://rdrr.io/r/utils/str.html) show `<redacted>`, as do
 [`print()`](https://rdrr.io/r/base/print.html) and
 [`str()`](https://rdrr.io/r/utils/str.html) of lists that contain them
-(and [`format()`](https://rdrr.io/r/base/format.html) of such lists from
-R 4.6.0), while
+([`format()`](https://rdrr.io/r/base/format.html) of a plain list only
+redacts from R 4.6.0; the lists this package returns redact in every
+version), while
 [`writeLines()`](https://rdrr.io/r/base/writeLines.html),
 [`paste()`](https://rdrr.io/r/base/paste.html),
 [`as.character()`](https://rdrr.io/r/base/character.html), and the

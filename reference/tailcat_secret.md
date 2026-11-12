@@ -18,7 +18,11 @@ instead of the value, and so do printing and
 secret. [`format()`](https://rdrr.io/r/base/format.html) of a plain list
 that contains a secret redacts it in R 4.6.0 and later; earlier versions
 of R format list elements without consulting their class, so there it
-shows the value.
+shows the value. The list returned by `TailcatServer$info()` has class
+`tailcat_info` and the list returned by
+[`tailcat_keygen()`](https://rundel.github.io/rtailcat/reference/tailcat_keygen.md)
+has class `tailcat_keys`, and both redact under
+[`format()`](https://rdrr.io/r/base/format.html) in every version of R.
 
 Everything else sees the plain string:
 [`as.character()`](https://rdrr.io/r/base/character.html),
@@ -60,13 +64,23 @@ str(object, ...)
 
 # S3 method for class 'tailcat_secret'
 toString(x, ...)
+
+# S3 method for class 'tailcat_info'
+format(x, ...)
+
+# S3 method for class 'tailcat_info'
+print(x, ...)
+
+# S3 method for class 'tailcat_info'
+str(object, ...)
 ```
 
 ## Arguments
 
 - x, object:
 
-  A `tailcat_secret`.
+  A `tailcat_secret`, or the `tailcat_info` list returned by
+  `TailcatServer$info()`.
 
 - ...:
 
@@ -76,7 +90,9 @@ toString(x, ...)
 
 [`format()`](https://rdrr.io/r/base/format.html) and
 [`toString()`](https://rdrr.io/r/base/toString.html) return
-`"<redacted>"` for each element;
+`"<redacted>"` for each element of a secret;
+[`format()`](https://rdrr.io/r/base/format.html) of a `tailcat_info`
+list returns a named character vector with its secrets redacted;
 [`print()`](https://rdrr.io/r/base/print.html) and
 [`str()`](https://rdrr.io/r/utils/str.html) return their input
 invisibly.
@@ -90,7 +106,7 @@ keys$private_key
 str(keys)
 #> List of 3 (class tailcat_keys)
 #>  $ private_key  : <tailcat_secret> <redacted> 
-#>  $ public_key   : chr "nodekey:fb8fde634716ce893f5331183cf911089973aac5585a5f7aef1114b96604f123" 
+#>  $ public_key   : chr "nodekey:c5e497b1d3cac47c58135a3af7430e1eeb44c5c71e0e4a9532e9ddcf5c8e3542" 
 #>  $ preshared_key: <tailcat_secret> <redacted> 
 nchar(keys$private_key) > 0
 #> [1] TRUE

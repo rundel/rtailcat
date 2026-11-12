@@ -52,6 +52,8 @@ Requires Go (version from the `go` line of `src/go/go.mod`) in addition to the u
 - Minimum versions in DESCRIPTION follow the features the code uses: cpp11 0.5.4 (`cpp11::package()` stopped using the non-API `R_NamespaceRegistry`, which `R CMD check` reports in compiled code), later 1.2.0 (`later_api.h` stopped including `Rcpp.h`; private loops, loop ids, and `exists_loop()` date from 1.0.0), R6 2.1.2 (`format.R6()` calls a public `$format()`), cli 3.4.0 (`{.obj_type_friendly}`), rlang 1.0.0 (`frame_call()`). `Depends: R (>= 4.0.0)` is what cpp11 0.5.1 and later require, and keeps `R CMD check` from noting that versioned `LinkingTo` needs R >= 3.0.2. promises, jsonlite, and the Suggests have no established minimum.
 - `./cleanup` removes all build outputs, including the Go caches from a hermetic build.
 
+CI: `.github/workflows/R-CMD-check.yaml` and `pkgdown.yaml` are the r-lib/actions templates plus an `actions/setup-go` step that reads the Go version from `src/go/go.mod` (both workflows install the package, so both need Go). `setup-r` sets `NOT_CRAN=true`, so the check runs the network tests against the local relay. The check uses `error-on: "error"` because of the one expected Go-runtime warning, which means a new warning does not fail CI; read the check log when changing compiled code or docs.
+
 Only macOS arm64 has been tested. `configure.win`, `src/Makevars.win`, and the Linux version script `src/rtailcat.map` are best effort.
 
 ## Common commands

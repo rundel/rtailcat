@@ -1,5 +1,9 @@
 # rtailcat
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/rundel/rtailcat/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/rundel/rtailcat/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
 rtailcat lets R act as either end of a [tailcat](https://github.com/tailscale/tailcat) connection. A tailcat server registers with a public relay and gets a secret, shareable address; any client holding that address can open TCP streams or exchange UDP datagrams with the server, from anywhere, without accounts, port forwarding, or a VPN. Traffic is end-to-end encrypted and uses a direct path between the peers when one can be found.
 
 The package embeds tailcat's Go library through its versioned C ABI and wraps it in R6 classes: `TailcatServer`, `TailcatListener`, `TailcatClient`, and `TailcatConnection`. Every blocking method also has an `_async()` version that returns a [promises](https://rstudio.github.io/promises/) promise, so servers can run alongside Shiny, httpuv, or other code driven by the [later](https://r-lib.github.io/later/) event loop.

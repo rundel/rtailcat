@@ -16,3 +16,5 @@
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$
+^tools/vignette\.R$
+^tools/vignette-side\.R$

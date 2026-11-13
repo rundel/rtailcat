@@ -26,8 +26,11 @@ Suggests:
     curl,
     parallel,
     processx,
+    quarto,
+    shiny,
     testthat (>= 3.0.0),
     withr
+VignetteBuilder: quarto
 LinkingTo:
     cpp11 (>= 0.5.4),
     later (>= 1.2.0)

@@ -354,7 +354,7 @@ R CMD build . && R CMD check --no-manual rtailcat_*.tar.gz
 - `vignettes/building-on-rtailcat.qmd` (Quarto,
   `VignetteBuilder: quarto`, so building it needs the quarto CLI; both
   CI workflows install it) shows three example “packages” built on
-  rtailcat: wormhole, remote, and progress. Every cell is `eval: false`
+  rtailcat: wormhole, progress, and proxy. Every cell is `eval: false`
   (set in the front matter); the output is stored in the cells as `#>`
   lines.
 - The vignette is the source of the example code. Cells labeled

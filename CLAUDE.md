@@ -43,7 +43,7 @@ Requires Go (version from the `go` line of `src/go/go.mod`) in addition to the u
 
 - `configure` locates Go (`RTAILCAT_GO` as a path, which is made absolute, or a command name on PATH; otherwise PATH, then common install locations), checks its version by running `go env GOVERSION` in `src/go` (so a `GOTOOLCHAIN` that allows switching reports the toolchain the build will use), and writes `src/Makevars` from `src/Makevars.in`, escaping the substituted values for `sed`. It sets `GOTOOLCHAIN=local` unless already set and never downloads Go itself.
 - Every `go` invocation of the build (`configure`, `configure.win`, both Makevars files) runs with `GOWORK=off` and `GOFLAGS` set to the module flag (`-mod=readonly` or `-mod=vendor`), so a `go.work` in a parent directory, `GOWORK`, or the user's `GOFLAGS` (environment or `go env -w`) cannot change it. The command lines still pass their own flags.
-- `src/rtailcat-win.def` limits the Windows DLL's exports to `R_init_rtailcat` (untested, like the rest of the Windows build).
+- `src/rtailcat-win.def` limits the Windows DLL's exports to `R_init_rtailcat`. The Windows build passes in CI; whether the export list is in fact limited has not been inspected.
 - The Go build is a make rule in `src/Makevars.in`; outputs go to `src/go/build/`.
 - Default mode uses the user's normal Go caches and downloads the pinned, checksum-verified modules. Hermetic mode (when `src/go/vendor/` exists or `RTAILCAT_HERMETIC=1`) keeps every Go cache, `HOME`, and telemetry write inside `src/go/build/`.
 - `tools/vendor.sh` creates `src/go/vendor/` (32 MB, git-ignored) for offline or self-contained tarballs. Such a tarball is not for CRAN: `R CMD build` warns about file paths of more than 100 bytes in the vendored Go sources. This is accepted (owner's decision) and needs no build change.
@@ -54,7 +54,7 @@ Requires Go (version from the `go` line of `src/go/go.mod`) in addition to the u
 
 CI: `.github/workflows/R-CMD-check.yaml` and `pkgdown.yaml` are the r-lib/actions templates plus an `actions/setup-go` step that reads the Go version from `src/go/go.mod` (both workflows install the package, so both need Go). `setup-r` sets `NOT_CRAN=true`, so the check runs the network tests against the local relay. The check uses `error-on: "error"` because of the one expected Go-runtime warning, which means a new warning does not fail CI; read the check log when changing compiled code or docs.
 
-Only macOS arm64 has been tested. `configure.win`, `src/Makevars.win`, and the Linux version script `src/rtailcat.map` are best effort.
+Tested platforms: macOS arm64 (development and CI), Ubuntu x86_64 on R devel, release, and oldrel-1 (CI), and Windows x86_64 with Rtools (CI). On Windows the interrupt test and the fork test are skipped, so interrupting a blocking call is untested there. macOS x86_64 is untested.
 
 ## Common commands
 

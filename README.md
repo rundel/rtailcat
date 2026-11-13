@@ -8,9 +8,11 @@ rtailcat lets R act as either end of a [tailcat](https://github.com/tailscale/ta
 
 The package embeds tailcat's Go library through its versioned C ABI and wraps it in R6 classes: `TailcatServer`, `TailcatListener`, `TailcatClient`, and `TailcatConnection`. Every blocking method also has an `_async()` version that returns a [promises](https://rstudio.github.io/promises/) promise, so servers can run alongside Shiny, httpuv, or other code driven by the [later](https://r-lib.github.io/later/) event loop.
 
+Full documentation is at <https://rundel.github.io/rtailcat/>.
+
 ## Installation
 
-Building the package needs a Go toolchain (version 1.27.2 or newer, see `src/go/go.mod`), a C compiler, and GNU make. `configure` looks for Go in the `RTAILCAT_GO` environment variable, on the `PATH`, and in a few common install locations, and fails with an explanation if it cannot find a recent enough version. It never downloads Go itself.
+Building the package needs a Go toolchain (version 1.27.2 or newer, see `src/go/go.mod`), a C compiler, and GNU make; on Windows that means [Rtools](https://cran.r-project.org/bin/windows/Rtools/) plus Go on the `PATH`. `configure` looks for Go in the `RTAILCAT_GO` environment variable, on the `PATH`, and in a few common install locations, and fails with an explanation if it cannot find a recent enough version. It never downloads Go itself.
 
 The first build downloads the pinned, checksum-verified Go modules unless the source tree contains `src/go/vendor/` (created by `tools/vendor.sh`), in which case it builds offline. A tarball built from a vendored tree is meant for offline or self-contained installs, not for CRAN: the vendored Go sources include file paths longer than 100 bytes, so `R CMD build` warns that such paths are not portable to every tar implementation. The warning is expected and does not affect installing with a current R.
 
@@ -172,16 +174,20 @@ By default each server gets a new key pair and address. To keep an address acros
 
 ## Platform status
 
-| Platform             | Status                         |
-| -------------------- | ------------------------------ |
-| macOS (arm64)        | Tested                         |
-| macOS (x86_64)       | Expected to work, untested     |
-| Linux                | Expected to work, untested     |
-| Windows (Rtools)     | Build files provided, untested |
+`R CMD check`, including the end-to-end tests against a local relay, runs on GitHub Actions for every push:
+
+| Platform                 | R versions                 | Status                                              |
+| ------------------------ | -------------------------- | --------------------------------------------------- |
+| macOS (arm64)            | release                    | Tested in CI and in development                     |
+| Linux (Ubuntu, x86_64)   | devel, release, oldrel-1   | Tested in CI                                        |
+| Windows (x86_64, Rtools) | release                    | Tested in CI, except the interrupt and fork tests   |
+| macOS (x86_64)           |                            | Expected to work, untested                          |
+
+`R CMD check` reports one expected message about compiled code on every platform (a WARNING on macOS and Linux, a NOTE on Windows): the Go runtime in the package's shared library refers to `stderr`, `abort`, and `exit`.
 
 ## Development
 
-`devtools::test()` runs the end-to-end tests against a local relay on 127.0.0.1, so they need Go but no internet access: a setup file builds upstream's `internal/capitest` relay from the small Go module in `tests/relay/` (pinned to the same tailcat commit as the package) into a temporary directory and stops it when the run ends. If the relay cannot be built or started, the tests fall back to tailcat's public relays and say so. Set `RTAILCAT_TEST_RELAY` to `local` (fail instead of falling back), `public`, or `auto` (the default), or `RTAILCAT_SKIP_ONLINE=1` to skip the network tests. On CRAN, and under `R CMD check` unless `NOT_CRAN=true`, nothing is built and the network tests are skipped.
+`devtools::test()` runs the end-to-end tests against a local relay on 127.0.0.1, so they need Go but no internet access: a setup file builds upstream's `internal/capitest` relay from the small Go module in `tests/relay/` (pinned to the same tailcat commit as the package) into a temporary directory and stops it when the run ends. If the relay cannot be built or started, the tests fall back to tailcat's public relays and say so. Set `RTAILCAT_TEST_RELAY` to `local` (fail instead of falling back), `public`, or `auto` (the default), or `RTAILCAT_SKIP_ONLINE=1` to skip the network tests. On CRAN, and under `R CMD check` unless `NOT_CRAN=true`, nothing is built and the network tests are skipped. The GitHub Actions workflow installs Go with `actions/setup-go` and sets `NOT_CRAN`, so it runs the full suite with the local relay.
 
 ## License
 

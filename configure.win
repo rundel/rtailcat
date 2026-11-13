@@ -24,12 +24,33 @@ GO="${RTAILCAT_GO:-go}"
 case $GO in
   /* | [A-Za-z]:[/\\]*) ;;
   */* | *\\*)
-    echo "ERROR: RTAILCAT_GO must be an absolute path to go.exe or a command name on PATH, not the relative path '$GO'." >&2
+    cat >&2 <<EOF
+
+ERROR: RTAILCAT_GO is a relative path.
+
+  RTAILCAT_GO:  $GO
+
+Set RTAILCAT_GO to the absolute path of go.exe, or to a command name on PATH,
+and reinstall.
+
+EOF
     exit 1
     ;;
   *)
     if ! command -v "$GO" >/dev/null 2>&1; then
-      echo "ERROR: rtailcat needs the Go toolchain (Go >= $required), but '$GO' was not found on PATH. Install Go from https://go.dev/dl/ and put it on PATH, or set RTAILCAT_GO to the full path of go.exe." >&2
+      cat >&2 <<EOF
+
+ERROR: rtailcat needs the Go toolchain to build, and '$GO' was not found on PATH.
+
+  Required:  Go >= $required
+
+To fix this, install Go from https://go.dev/dl/, then do one of the following
+and reinstall:
+
+  * Put go.exe on PATH
+  * Set RTAILCAT_GO to the full path of go.exe
+
+EOF
       exit 1
     fi
     ;;
@@ -56,7 +77,19 @@ if test -z "$found"; then
   found=`cd / && GOTOOLCHAIN=local "$GO" env GOVERSION 2>/dev/null | sed -n 's/^go\([0-9][0-9.]*\).*$/\1/p'`
 fi
 if test -z "$found"; then
-  echo "ERROR: could not run '$GO' to determine its version. rtailcat needs Go >= $required: install Go from https://go.dev/dl/ and put it on PATH, or set RTAILCAT_GO to the full path of go.exe." >&2
+  cat >&2 <<EOF
+
+ERROR: could not run '$GO' to determine its version.
+
+  Required:  Go >= $required
+
+To fix this, install Go from https://go.dev/dl/, then do one of the following
+and reinstall:
+
+  * Put go.exe on PATH
+  * Set RTAILCAT_GO to the full path of go.exe
+
+EOF
   exit 1
 fi
 version_ok=`echo "$found $required" | awk '{
@@ -68,7 +101,21 @@ version_ok=`echo "$found $required" | awk '{
   print "yes"
 }'`
 if test "$version_ok" != "yes"; then
-  echo "ERROR: rtailcat needs Go >= $required but found Go $found (GOTOOLCHAIN=$GOTOOLCHAIN). Install a newer Go from https://go.dev/dl/, or set GOTOOLCHAIN=auto to let Go download the required toolchain itself." >&2
+  cat >&2 <<EOF
+
+ERROR: the Go toolchain that was found is too old to build rtailcat.
+
+  Required:     Go >= $required
+  Found:        Go $found
+  GOTOOLCHAIN:  $GOTOOLCHAIN
+
+To fix this, do one of the following and reinstall:
+
+  * Install a newer Go from https://go.dev/dl/
+  * Set RTAILCAT_GO to the full path of a newer go.exe
+  * Set GOTOOLCHAIN=auto to let Go download the toolchain it needs
+
+EOF
   exit 1
 fi
 echo "rtailcat: using Go $found (GOTOOLCHAIN=$GOTOOLCHAIN)"

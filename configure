@@ -51,19 +51,33 @@ find_go() {
 GO=`find_go` || GO=""
 if test -z "$GO" && test -n "$RTAILCAT_GO"; then
   cat >&2 <<EOF
-ERROR: RTAILCAT_GO is set to '$RTAILCAT_GO', but that is neither an executable
-file nor a command found on PATH. Set RTAILCAT_GO to the path of the go
-executable (or unset it to search PATH and common install locations), and
-reinstall.
+
+ERROR: RTAILCAT_GO does not point to a go executable.
+
+  RTAILCAT_GO:  $RTAILCAT_GO
+
+It is neither an executable file nor a command found on PATH. To fix this, do
+one of the following and reinstall:
+
+  * Set RTAILCAT_GO to the path of the go executable
+  * Unset RTAILCAT_GO to search PATH and the common install locations
+
 EOF
   exit 1
 fi
 if test -z "$GO"; then
   cat >&2 <<EOF
-ERROR: rtailcat needs the Go toolchain (Go >= $required) to build, but no 'go'
-executable was found. Install Go from https://go.dev/dl/ (or with your system
-package manager), then either put it on PATH or set RTAILCAT_GO to the path of
-the go executable, and reinstall.
+
+ERROR: rtailcat needs the Go toolchain to build, and no go executable was found.
+
+  Required:  Go >= $required
+
+To fix this, install Go from https://go.dev/dl/ (or with your system package
+manager), then do one of the following and reinstall:
+
+  * Put the go executable on PATH
+  * Set RTAILCAT_GO to the path of the go executable
+
 EOF
   exit 1
 fi
@@ -129,17 +143,35 @@ version_ok=`echo "$found $required" | awk '{
 if test "$version_ok" != "yes"; then
   if test "$GOTOOLCHAIN" = "local"; then
     cat >&2 <<EOF
-ERROR: rtailcat needs Go >= $required but $GO is Go $found.
-Install a newer Go from https://go.dev/dl/, or point RTAILCAT_GO at a newer go
-executable, and reinstall. Alternatively, set GOTOOLCHAIN=auto to let Go
-download the required toolchain itself (this script never downloads Go).
+
+ERROR: the Go toolchain that was found is too old to build rtailcat.
+
+  Required:  Go >= $required
+  Found:     Go $found at $GO
+
+To fix this, do one of the following and reinstall:
+
+  * Install a newer Go from https://go.dev/dl/
+  * Set RTAILCAT_GO to the path of a newer go executable
+  * Set GOTOOLCHAIN=auto to let Go download the toolchain it needs
+    (this script never downloads Go itself)
+
 EOF
   else
     cat >&2 <<EOF
-ERROR: rtailcat needs Go >= $required. $GO is Go $local_found, and with
-GOTOOLCHAIN=$GOTOOLCHAIN it did not switch to a new enough toolchain. Check the
-GOTOOLCHAIN value and network access, or install a newer Go from
-https://go.dev/dl/, and reinstall.
+
+ERROR: the Go toolchain that was found is too old to build rtailcat, and Go did
+not switch to a newer one.
+
+  Required:     Go >= $required
+  Found:        Go $local_found at $GO
+  GOTOOLCHAIN:  $GOTOOLCHAIN
+
+To fix this, do one of the following and reinstall:
+
+  * Check the GOTOOLCHAIN value and that Go can reach the network
+  * Install a newer Go from https://go.dev/dl/
+
 EOF
   fi
   exit 1

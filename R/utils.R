@@ -75,6 +75,21 @@ check_string = function(x, arg, null_ok = FALSE, trim = FALSE, call = parent.fra
   enc2utf8(x)
 }
 
+# A NULL argument falls back to the rtailcat.derp_map_url option.
+check_derp_map_url = function(derp_map_url, call = parent.frame()) {
+  if (!is.null(derp_map_url)) {
+    return(check_string(derp_map_url, "derp_map_url", call = call))
+  }
+  value = getOption("rtailcat.derp_map_url")
+  if (is.null(value)) {
+    return(NULL)
+  }
+  if (!is.character(value) || length(value) != 1 || is.na(value) || !nzchar(value)) {
+    abort_invalid("The {.code rtailcat.derp_map_url} option must be a single non-empty string or {.code NULL}.", call = call)
+  }
+  enc2utf8(value)
+}
+
 check_address = function(address, call = parent.frame()) {
   check_string(address, "address", trim = TRUE, call = call)
 }

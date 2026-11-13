@@ -4,7 +4,10 @@
 \alias{tailcat_keygen}
 \title{Generate tailcat keys}
 \usage{
-tailcat_keygen()
+tailcat_keygen(path = NULL)
+}
+\arguments{
+\item{path}{\code{NULL} (the default) to return new keys without saving them, or the path of a keys file: if it exists, the keys are loaded from it with \code{\link[=tailcat_keys_load]{tailcat_keys_load()}}; otherwise new keys are generated and saved there with \code{\link[=tailcat_keys_save]{tailcat_keys_save()}}. This gives a script the same keys every time it runs.}
 }
 \value{
 A list of class \code{tailcat_keys} with elements \code{private_key}, \code{public_key}, and \code{preshared_key}, each a string in tailcat's text encoding; \code{private_key} and \code{preshared_key} are \link{tailcat_secret} strings.
@@ -13,7 +16,7 @@ A list of class \code{tailcat_keys} with elements \code{private_key}, \code{publ
 Generates a node key pair and a random pre-shared key locally, without network access. Pass the result as the \code{key} of a \link{TailcatServer} to give a server a stable identity and address across restarts, or pass it as the \code{key} of a \link{TailcatClient} to give a client a stable public key (useful with \code{allowed_clients}).
 }
 \details{
-The private key and the pre-shared key are secrets. They are \link{tailcat_secret} strings, so \code{print()}, \code{format()}, and \code{str()} of the keys, or of the elements, show only the public key and \verb{<redacted>}. The elements still hold the full values (\code{as.character()} or \code{unclass()} returns them, and \code{dput()} shows them), so store them securely, for example with \code{saveRDS()} to a file only you can read.
+The private key and the pre-shared key are secrets. They are \link{tailcat_secret} strings, so \code{print()}, \code{format()}, and \code{str()} of the keys, or of the elements, show only the public key and \verb{<redacted>}. The elements still hold the full values (\code{as.character()} or \code{unclass()} returns them, and \code{dput()} shows them), so store them securely: \code{\link[=tailcat_keys_save]{tailcat_keys_save()}} writes them to a file only you can read.
 }
 \examples{
 keys = tailcat_keygen()

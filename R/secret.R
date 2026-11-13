@@ -57,6 +57,24 @@ reveal = function(x) {
   if (inherits(x, "tailcat_secret")) unclass(x) else x
 }
 
+#' Reveal a secret
+#'
+#' Returns the plain string held by a [tailcat_secret], for the places where an application means to show or pass on an address or key, such as printing a server's address once for the user to copy, or putting it into a message. It is the explicit form of `as.character()`, so the intent is visible in the code. To pass an address through a file, use [tailcat_address_write()].
+#'
+#' @param x A [tailcat_secret], or a plain character vector, which is returned unchanged.
+#' @return A character vector without the `tailcat_secret` class.
+#' @examples
+#' keys = tailcat_keygen()
+#' keys$private_key
+#' nchar(tailcat_reveal(keys$private_key)) > 0
+#' @export
+tailcat_reveal = function(x) {
+  if (!is.character(x)) {
+    abort_invalid("{.arg x} must be a {.cls tailcat_secret} or a character vector, not {.obj_type_friendly {x}}.")
+  }
+  as.character(reveal(x))
+}
+
 # A plain list cannot redact under format() before R 4.6.0, so the one info list that holds a secret gets a class.
 #' @rdname tailcat_secret
 #' @export

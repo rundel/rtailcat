@@ -3,7 +3,7 @@
 #' @description
 #' A TCP stream or connected UDP flow between a [TailcatClient] and a [TailcatServer]. Connections are created by `TailcatClient$dial()` and `TailcatListener$accept()`, not directly.
 #'
-#' For TCP, reads may return fewer bytes than requested and `$read()` returns `NULL` at end of stream. For UDP, each read returns one datagram (possibly `raw(0)`) and each write sends one datagram of at most 1232 bytes.
+#' For TCP, reads may return fewer bytes than requested and `$read()` returns `NULL` at end of stream. For UDP, each read returns one datagram (possibly `raw(0)`) and each write sends one datagram of at most 1232 bytes ([tailcat_udp_max_payload()]). `$write_message()` and `$read_message()` send and receive delimited messages over TCP (see the section on messages), and `$read_loop()` reads continuously from the event loop (see the section on read loops).
 #'
 #' One read and one write may be in flight at the same time (for example a pending `$read_async()` while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several `$write_async()` calls send their data in call order and several `$read_async()` calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.
 #'
@@ -12,6 +12,18 @@
 #' Once the connection, or the client or server that owns it, is closed, every method other than `$close()`, `$format()`, and `$print()`, and every field other than `$is_closed`, `$client`, and `$server`, raises a `tailcat_closed` error; nothing is kept from before. Timeouts (including `timeout = 0`, a poll) and errors are described in [TailcatServer].
 #'
 #' Because of an upstream tailcat bug, `$info()` (and so `$local_address` and `$remote_address`) fails with `tailcat_failure`, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called `$close_write()`). `$print()` and `$format()` avoid this by leaving the endpoints out once `$close_write()` has succeeded on the connection.
+#'
+#' @section Messages:
+#' TCP is a stream of bytes with no boundaries: one `$write()` may arrive as several reads, and several writes as one. `$write_message()` and `$read_message()` add boundaries, so that each `$read_message()` returns exactly what one `$write_message()` sent. On the wire a message is its length as 4 bytes (unsigned, big-endian, so a peer in another language can implement it in a few lines) followed by that many bytes. The protocol allows messages up to 4 GiB; rtailcat sends and accepts at most 2147483647 bytes (just under 2 GiB) per message.
+#'
+#' Give `$read_message()` a `max_bytes` that fits your protocol whenever the peer is not fully trusted: the length is checked before the message is read, so an oversized message is refused without reading it into memory.
+#'
+#' To send R objects, serialize them: `conn$write_message(serialize(x, NULL))` and `unserialize(conn$read_message(max_bytes = 1e8))`. Only do this with peers you trust completely: [unserialize()] on data from an untrusted peer can run arbitrary code. Use a data format such as JSON otherwise.
+#'
+#' @section Read loops:
+#' `$read_loop(callback)` reads continuously, driven by the later event loop, and calls `callback(data)` on the main R thread with each chunk (TCP), each datagram (UDP), or with `messages = TRUE` each message. It is the reading counterpart of `TailcatListener$serve()` and makes progress under the same conditions: while R is idle at the console, inside Shiny or httpuv, or while a script runs the event loop (see [tailcat_run()]). If `callback` returns a promise, the next read starts after it settles, so data is handled in order and a slow callback slows down reading rather than piling up work.
+#'
+#' The loop ends when the peer ends a TCP stream (`on_end` is then called), when the connection or its owner is closed, or when `$stop_reading()` is called; the last two end it quietly. If a read fails or the callback fails, `on_error` is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
 #'
 #' @examples
 #' \dontrun{
@@ -72,26 +84,10 @@ TailcatConnection = R6::R6Class(
     read_all = function(timeout = Inf, as = c("raw", "text"), max_bytes = Inf) {
       private$require_tcp("read_all")
       timeout = check_timeout(timeout)
-      deadline = deadline_from(timeout)
       as = check_as(as)
       max_bytes = check_max_bytes(max_bytes)
-      chunks = list()
-      total = 0
-      repeat {
-        result = rtc_conn_read(private$handle, read_all_chunk(max_bytes, total), remaining_until(deadline), NULL)
-        if (is.null(result)) {
-          break
-        }
-        if (inherits(result, "rtc_error")) {
-          private$check(result, "read to the end of the stream", timeout, bytes = byte_total(total))
-        }
-        chunks[[length(chunks) + 1L]] = result
-        total = total + length(result)
-        if (total > max_bytes) {
-          tailcat_abort(5L, headline = too_long_headline(max_bytes), bullets = too_long_bullets, bytes = byte_total(total))
-        }
-      }
-      convert_read(do.call(c, c(list(raw(0)), chunks)), as)
+      call = rlang::current_env()
+      convert_read(private$run(all_reader(max_bytes), "read to the end of the stream", timeout, call), as)
     },
 
     #' @description Asynchronous version of `$read_all()`. Canceling the promise with [tailcat_cancel()] ends the read in flight and starts no further reads.
@@ -102,53 +98,141 @@ TailcatConnection = R6::R6Class(
     read_all_async = function(timeout = Inf, as = c("raw", "text"), max_bytes = Inf) {
       private$require_tcp("read_all_async")
       timeout = check_timeout(timeout)
-      deadline = deadline_from(timeout)
       as = check_as(as)
       max_bytes = check_max_bytes(max_bytes)
       call = error_call(rlang::current_env())
-      handle = private$handle
-      fail = function(result, total) {
-        rtc_condition(result, op = "read to the end of the stream", object = "connection", timeout = timeout, handle = handle, bytes = byte_total(total), call = call)
+      private$run_async(all_reader(max_bytes), "read to the end of the stream", timeout, call, function(x) convert_read(x, as, call))
+    },
+
+    #' @description Read exactly `n` bytes (TCP only), waiting for as many reads as that takes. Use it to read fixed-size fields of a binary protocol; for messages of varying length see `$read_message()`.
+    #'
+    #' If the stream ends before the first byte, `$read_exact()` returns `NULL`, so a peer that closes the connection between records is not an error. If it ends part way, or on timeout or error, the condition's `bytes` field gives the number of bytes read before it; those bytes are discarded. The timeout covers all the reads together. With `timeout = 0` it returns only if all `n` bytes have already arrived.
+    #' @param n The number of bytes to read, a single non-negative whole number. `n = 0` returns `raw(0)` (or `""`) without reading.
+    #' @param timeout Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+    #' @param as `"raw"` or `"text"`, as for `$read()`.
+    #' @return A raw vector or a string of `n` bytes, or `NULL` if the stream ended before the first byte.
+    read_exact = function(n, timeout = Inf, as = c("raw", "text")) {
+      private$require_tcp("read_exact")
+      n = check_count(n)
+      timeout = check_timeout(timeout)
+      as = check_as(as)
+      call = rlang::current_env()
+      convert_read(private$run(exact_reader(n), exact_op(n), timeout, call), as)
+    },
+
+    #' @description Asynchronous version of `$read_exact()`. Canceling the promise with [tailcat_cancel()] ends the read in flight and starts no further reads.
+    #' @param n The number of bytes to read.
+    #' @param timeout Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+    #' @param as `"raw"` or `"text"`, as for `$read()`.
+    #' @return A promise resolving with a raw vector or a string, or `NULL` if the stream ended before the first byte.
+    read_exact_async = function(n, timeout = Inf, as = c("raw", "text")) {
+      private$require_tcp("read_exact_async")
+      n = check_count(n)
+      timeout = check_timeout(timeout)
+      as = check_as(as)
+      call = error_call(rlang::current_env())
+      private$run_async(exact_reader(n), exact_op(n), timeout, call, function(x) convert_read(x, as, call))
+    },
+
+    #' @description Send `data` as one message (TCP only), for the peer to read with `$read_message()`. See the section on messages.
+    #' @param data A raw vector, or a character vector which is pasted together without separators and sent as UTF-8. At most 2147483647 bytes.
+    #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls. On timeout or error the condition's `bytes` field gives the number of bytes already sent, counting the 4-byte length; the peer then sees a partial message, so close the connection.
+    #' @return The number of bytes in the message, not counting its length prefix, invisibly.
+    write_message = function(data, timeout = Inf) {
+      private$require_tcp("write_message")
+      data = private$message_payload(data)
+      timeout = check_timeout(timeout)
+      private$check(rtc_conn_write(private$handle, c(encode_length(length(data)), data), timeout, NULL), "write a message", timeout)
+      invisible(length(data))
+    },
+
+    #' @description Asynchronous version of `$write_message()`.
+    #' @param data A raw or character vector.
+    #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
+    #' @return A promise resolving with the number of bytes in the message.
+    write_message_async = function(data, timeout = Inf) {
+      private$require_tcp("write_message_async")
+      data = private$message_payload(data)
+      timeout = check_timeout(timeout)
+      size = length(data)
+      private$promise(function(cb) rtc_conn_write(private$handle, c(encode_length(size), data), timeout, cb), function(x) size, "write a message", timeout)
+    },
+
+    #' @description Read one message sent with `$write_message()` (TCP only). See the section on messages.
+    #'
+    #' If the stream ends cleanly between messages, `$read_message()` returns `NULL`. If it ends part way through a message, or on timeout or error, the condition's `bytes` field gives the number of bytes read, counting the 4-byte length; those bytes are discarded and the connection should be closed, since the rest of the stream no longer starts at a message boundary. The timeout covers the whole message.
+    #' @param timeout Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+    #' @param as `"raw"` or `"text"`, as for `$read()`.
+    #' @param max_bytes The largest message to accept, a single non-negative whole number or `Inf` (the default; messages are limited to 2147483647 bytes in any case). The length is checked before the message is read: a longer message raises a `tailcat_failure` error with `bytes` set to 4, and its body is left unread, so close the connection.
+    #' @return A raw vector or a string, or `NULL` if the stream ended before the next message.
+    read_message = function(timeout = Inf, as = c("raw", "text"), max_bytes = Inf) {
+      private$require_tcp("read_message")
+      timeout = check_timeout(timeout)
+      as = check_as(as)
+      max_bytes = check_max_bytes(max_bytes)
+      call = rlang::current_env()
+      convert_read(private$run(message_reader(max_bytes), "read a message", timeout, call), as)
+    },
+
+    #' @description Asynchronous version of `$read_message()`. Canceling the promise with [tailcat_cancel()] ends the read in flight and starts no further reads; a message read part way is lost.
+    #' @param timeout Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+    #' @param as `"raw"` or `"text"`, as for `$read()`.
+    #' @param max_bytes The largest message to accept, as for `$read_message()`.
+    #' @return A promise resolving with a raw vector or a string, or `NULL` if the stream ended before the next message.
+    read_message_async = function(timeout = Inf, as = c("raw", "text"), max_bytes = Inf) {
+      private$require_tcp("read_message_async")
+      timeout = check_timeout(timeout)
+      as = check_as(as)
+      max_bytes = check_max_bytes(max_bytes)
+      call = error_call(rlang::current_env())
+      private$run_async(message_reader(max_bytes), "read a message", timeout, call, function(x) convert_read(x, as, call))
+    },
+
+    #' @description Start an asynchronous read loop that calls `callback(data)` with every chunk (TCP), datagram (UDP), or message (with `messages = TRUE`) as it arrives, and returns immediately. See the section on read loops.
+    #' @param callback A function of one argument, the data read. It may return a promise, in which case the next read starts once the promise settles.
+    #' @param on_error A function `function(cond)` called when a read fails, the data is not acceptable (such as a message longer than `max_bytes`), `callback` signals an error, or the promise it returned rejects; or `NULL` to turn such errors into warnings (signaled from the later event loop). The loop then stops and the connection is closed. An error signaled by `on_error` itself is turned into a warning.
+    #' @param on_end A function of no arguments called when the peer ends a TCP stream, after the last data, or `NULL`. An error it signals is turned into a warning.
+    #' @param as `"raw"` or `"text"`, as for `$read()`.
+    #' @param messages `FALSE` (the default) to deliver data as it arrives, or `TRUE` to deliver whole messages sent with `$write_message()` (TCP only).
+    #' @param max_bytes The largest message to accept with `messages = TRUE`, as for `$read_message()`.
+    #' @return The connection, invisibly. Calling it on a connection that is already in a read loop raises a `tailcat_failure` error (call `$stop_reading()` first), and on a closed connection a `tailcat_closed` error.
+    read_loop = function(callback, on_error = NULL, on_end = NULL, as = c("raw", "text"), messages = FALSE, max_bytes = Inf) {
+      check_function(callback, "callback")
+      check_function(on_error, "on_error", null_ok = TRUE)
+      check_function(on_end, "on_end", null_ok = TRUE)
+      as = check_as(as)
+      if (!isTRUE(messages) && !isFALSE(messages)) {
+        abort_invalid("{.arg messages} must be {.code TRUE} or {.code FALSE}.")
       }
-      state = new.env(parent = emptyenv())
-      state$canceled = FALSE
-      state$cancel = NULL
-      p = promises::promise(function(resolve, reject) {
-        chunks = list()
-        total = 0
-        step = function() {
-          if (state$canceled) {
-            reject(fail(canceled_error(), total))
-            return(invisible())
-          }
-          state$cancel = rtc_conn_read(handle, read_all_chunk(max_bytes, total), remaining_until(deadline), rtc_callback(
-            function(result) {
-              if (is.null(result)) {
-                resolve(convert_read(do.call(c, c(list(raw(0)), chunks)), as, call))
-              } else if (inherits(result, "rtc_error")) {
-                reject(fail(result, total))
-              } else {
-                chunks[[length(chunks) + 1L]] <<- result
-                total <<- total + length(result)
-                if (total > max_bytes) {
-                  reject(tailcat_condition(5L, headline = too_long_headline(max_bytes), bullets = too_long_bullets, bytes = byte_total(total), call = call))
-                } else {
-                  step()
-                }
-              }
-            },
-            on_error = reject
-          ))
-          invisible()
+      max_bytes = check_max_bytes(max_bytes)
+      if (messages) {
+        private$require_tcp("read_loop(messages = TRUE)")
+      }
+      if (self$is_closed) {
+        abort_closed("connection", private$handle)
+      }
+      if (private$reading) {
+        tailcat_abort(5L, headline = "This connection is already in a read loop.", bullets = c(i = "Call `$stop_reading()` first to read with a new callback."))
+      }
+      private$reading = TRUE
+      private$read_gen = private$read_gen + 1L
+      loop = list(callback = callback, on_error = on_error, on_end = on_end, as = as, messages = messages, max_bytes = max_bytes, gen = private$read_gen)
+      private$read_next(loop)
+      invisible(self)
+    },
+
+    #' @description Stop the read loop started by `$read_loop()` without closing the connection. The pending read is canceled; data whose read completed at the same moment is still passed to the callback, but a message read part way is lost, so with `messages = TRUE` stop only between messages or then close the connection. Calling it when no read loop is running does nothing.
+    #' @return The connection, invisibly.
+    stop_reading = function() {
+      if (private$reading) {
+        private$reading = FALSE
+        private$read_gen = private$read_gen + 1L
+        if (!is.null(private$read_cancel)) {
+          private$read_cancel()
+          private$read_cancel = NULL
         }
-        step()
-      })
-      with_canceler(p, function() {
-        state$canceled = TRUE
-        if (!is.null(state$cancel)) {
-          rtc_cancel(state$cancel)
-        }
-      })
+      }
+      invisible(self)
     },
 
     #' @description Write all of `data`. On timeout or error the condition's `bytes` field gives the number of bytes already sent.
@@ -228,7 +312,7 @@ TailcatConnection = R6::R6Class(
       side = if (inherits(private$owner, "TailcatClient")) "client (dialed)" else "server (accepted)"
       lines = c(
         "<TailcatConnection>",
-        paste0("  state:   ", state_label(closed, handle = private$handle)),
+        paste0("  state:   ", state_label(closed, handle = private$handle), if (private$reading && !closed) " (reading)" else ""),
         paste0("  network: ", network_name(private$network_code)),
         paste0("  side:    ", side)
       )
@@ -285,6 +369,94 @@ TailcatConnection = R6::R6Class(
     handle = NULL,
     owner = NULL,
     network_code = NULL,
+    reading = FALSE,
+    read_gen = 0L,
+    read_cancel = NULL,
+    context = function(op, timeout) {
+      list(op = op, object = "connection", timeout = timeout, handle = private$handle)
+    },
+    run = function(reader, op, timeout, call) {
+      run_reader(private$handle, reader, timeout, private$context(op, timeout), call)
+    },
+    run_async = function(reader, op, timeout, call, transform) {
+      reader_promise(private$handle, reader, timeout, private$context(op, timeout), call, transform)
+    },
+    read_next = function(loop) {
+      if (loop$gen != private$read_gen) {
+        return(invisible())
+      }
+      if (self$is_closed) {
+        private$reading = FALSE
+        private$read_cancel = NULL
+        return(invisible())
+      }
+      reader = if (loop$messages) message_reader(loop$max_bytes) else single_reader()
+      op = if (loop$messages) "read a message" else "read"
+      private$read_cancel = start_reader(private$handle, reader, Inf, private$context(op, Inf), NULL,
+        done = function(value) private$read_value(value, loop),
+        fail = function(cond) private$read_failed(cond, loop)
+      )
+      invisible()
+    },
+    read_value = function(value, loop) {
+      current = loop$gen == private$read_gen
+      if (is.null(value)) {
+        if (current) {
+          private$reading = FALSE
+          private$read_cancel = NULL
+        }
+        if (!is.null(loop$on_end)) {
+          tryCatch(loop$on_end(), error = function(e) {
+            deferred_warning(paste0("rtailcat: error in the on_end callback: ", conditionMessage(e)))
+          })
+        }
+        return(invisible())
+      }
+      failed = function(e) {
+        private$read_failed(e, loop, force = TRUE)
+        invisible()
+      }
+      resume = function(...) {
+        private$read_next(loop)
+        invisible()
+      }
+      tryCatch(
+        {
+          result = loop$callback(convert_read(value, loop$as, NULL))
+          if (promises::is.promising(result)) {
+            promises::then(promises::as.promise(result), onFulfilled = resume, onRejected = failed)
+          } else {
+            resume()
+          }
+        },
+        error = failed
+      )
+      invisible()
+    },
+    # A canceled or closed read ends the loop quietly. Other failures, and
+    # errors from the callback (force), are reported and close the connection.
+    read_failed = function(cond, loop, force = FALSE) {
+      if (!force && loop$gen != private$read_gen) {
+        return(invisible())
+      }
+      if (loop$gen == private$read_gen) {
+        private$reading = FALSE
+        private$read_cancel = NULL
+      }
+      if (!force && (inherits(cond, c("tailcat_closed", "tailcat_canceled")) || self$is_closed)) {
+        return(invisible())
+      }
+      report_error(cond, NULL, if (is.null(loop$on_error)) NULL else function(cond, conn) loop$on_error(cond), "the read loop")
+      tryCatch(self$close(), error = function(e) NULL)
+      invisible()
+    },
+    message_payload = function(data) {
+      data = as_payload(data, call = parent.frame())
+      if (length(data) > .Machine$integer.max) {
+        abort_invalid("A message holds at most {format_count(.Machine$integer.max)} bytes, not {format_count(length(data))}.", call = parent.frame())
+      }
+      data
+    },
     check = function(x, op, timeout = NULL, ..., call = rlang::caller_env()) {
       rtc_value(x, op = op, object = "connection", timeout = timeout, handle = private$handle, ..., call = call)
     },
@@ -344,6 +516,10 @@ too_long_headline = function(max_bytes) {
 }
 
 too_long_bullets = c(i = "The bytes read were discarded; the connection stays open.")
+
+exact_op = function(n) {
+  paste0("read ", format_count(n), if (n == 1) " byte" else " bytes")
+}
 
 byte_total = function(total) {
   if (total <= .Machine$integer.max) as.integer(total) else total

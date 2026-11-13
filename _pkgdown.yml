@@ -17,20 +17,25 @@ reference:
     desc: Read from and write to a TCP stream or UDP flow.
     contents:
       - TailcatConnection
-  - title: Cancellation
-    desc: Cancel a pending asynchronous operation.
+  - title: Asynchronous operations
+    desc: Cancel a pending operation, or run the event loop from a script.
     contents:
       - tailcat_cancel
+      - tailcat_wait
   - title: Keys and addresses
     desc: Create keys and inspect or resolve addresses locally.
     contents:
       - tailcat_keygen
+      - tailcat_keys_save
       - tailcat_address_parse
       - tailcat_address_resolve
+      - tailcat_address_write
   - title: Secrets
     desc: Redacted strings for addresses and keys.
     contents:
       - tailcat_secret
-  - title: Build information
+      - tailcat_reveal
+  - title: Limits and build information
     contents:
+      - tailcat_udp_max_payload
       - tailcat_build_info

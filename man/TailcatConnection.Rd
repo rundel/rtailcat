@@ -6,7 +6,7 @@
 \description{
 A TCP stream or connected UDP flow between a \link{TailcatClient} and a \link{TailcatServer}. Connections are created by \code{TailcatClient$dial()} and \code{TailcatListener$accept()}, not directly.
 
-For TCP, reads may return fewer bytes than requested and \verb{$read()} returns \code{NULL} at end of stream. For UDP, each read returns one datagram (possibly \code{raw(0)}) and each write sends one datagram of at most 1232 bytes.
+For TCP, reads may return fewer bytes than requested and \verb{$read()} returns \code{NULL} at end of stream. For UDP, each read returns one datagram (possibly \code{raw(0)}) and each write sends one datagram of at most 1232 bytes (\code{\link[=tailcat_udp_max_payload]{tailcat_udp_max_payload()}}). \verb{$write_message()} and \verb{$read_message()} send and receive delimited messages over TCP (see the section on messages), and \verb{$read_loop()} reads continuously from the event loop (see the section on read loops).
 
 One read and one write may be in flight at the same time (for example a pending \verb{$read_async()} while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several \verb{$write_async()} calls send their data in call order and several \verb{$read_async()} calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.
 
@@ -16,6 +16,22 @@ Once the connection, or the client or server that owns it, is closed, every meth
 
 Because of an upstream tailcat bug, \verb{$info()} (and so \verb{$local_address} and \verb{$remote_address}) fails with \code{tailcat_failure}, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called \verb{$close_write()}). \verb{$print()} and \verb{$format()} avoid this by leaving the endpoints out once \verb{$close_write()} has succeeded on the connection.
 }
+\section{Messages}{
+
+TCP is a stream of bytes with no boundaries: one \verb{$write()} may arrive as several reads, and several writes as one. \verb{$write_message()} and \verb{$read_message()} add boundaries, so that each \verb{$read_message()} returns exactly what one \verb{$write_message()} sent. On the wire a message is its length as 4 bytes (unsigned, big-endian, so a peer in another language can implement it in a few lines) followed by that many bytes. The protocol allows messages up to 4 GiB; rtailcat sends and accepts at most 2147483647 bytes (just under 2 GiB) per message.
+
+Give \verb{$read_message()} a \code{max_bytes} that fits your protocol whenever the peer is not fully trusted: the length is checked before the message is read, so an oversized message is refused without reading it into memory.
+
+To send R objects, serialize them: \code{conn$write_message(serialize(x, NULL))} and \code{unserialize(conn$read_message(max_bytes = 1e8))}. Only do this with peers you trust completely: \code{\link[=unserialize]{unserialize()}} on data from an untrusted peer can run arbitrary code. Use a data format such as JSON otherwise.
+}
+
+\section{Read loops}{
+
+\verb{$read_loop(callback)} reads continuously, driven by the later event loop, and calls \code{callback(data)} on the main R thread with each chunk (TCP), each datagram (UDP), or with \code{messages = TRUE} each message. It is the reading counterpart of \code{TailcatListener$serve()} and makes progress under the same conditions: while R is idle at the console, inside Shiny or httpuv, or while a script runs the event loop (see \code{\link[=tailcat_run]{tailcat_run()}}). If \code{callback} returns a promise, the next read starts after it settles, so data is handled in order and a slow callback slows down reading rather than piling up work.
+
+The loop ends when the peer ends a TCP stream (\code{on_end} is then called), when the connection or its owner is closed, or when \verb{$stop_reading()} is called; the last two end it quietly. If a read fails or the callback fails, \code{on_error} is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
+}
+
 \examples{
 \dontrun{
 conn = TailcatClient$new(address)$dial(8080)
@@ -49,6 +65,14 @@ conn$read_all(timeout = 10, as = "text")
     \item \href{#method-TailcatConnection-read_async}{\code{TailcatConnection$read_async()}}
     \item \href{#method-TailcatConnection-read_all}{\code{TailcatConnection$read_all()}}
     \item \href{#method-TailcatConnection-read_all_async}{\code{TailcatConnection$read_all_async()}}
+    \item \href{#method-TailcatConnection-read_exact}{\code{TailcatConnection$read_exact()}}
+    \item \href{#method-TailcatConnection-read_exact_async}{\code{TailcatConnection$read_exact_async()}}
+    \item \href{#method-TailcatConnection-write_message}{\code{TailcatConnection$write_message()}}
+    \item \href{#method-TailcatConnection-write_message_async}{\code{TailcatConnection$write_message_async()}}
+    \item \href{#method-TailcatConnection-read_message}{\code{TailcatConnection$read_message()}}
+    \item \href{#method-TailcatConnection-read_message_async}{\code{TailcatConnection$read_message_async()}}
+    \item \href{#method-TailcatConnection-read_loop}{\code{TailcatConnection$read_loop()}}
+    \item \href{#method-TailcatConnection-stop_reading}{\code{TailcatConnection$stop_reading()}}
     \item \href{#method-TailcatConnection-write}{\code{TailcatConnection$write()}}
     \item \href{#method-TailcatConnection-write_async}{\code{TailcatConnection$write_async()}}
     \item \href{#method-TailcatConnection-close_write}{\code{TailcatConnection$close_write()}}
@@ -183,6 +207,209 @@ conn$read_all(timeout = 10, as = "text")
   }
   \subsection{Returns}{
     A promise resolving with a raw vector or a string.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-read_exact"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-read_exact}{}}}
+\subsection{\code{TailcatConnection$read_exact()}}{
+  Read exactly \code{n} bytes (TCP only), waiting for as many reads as that takes. Use it to read fixed-size fields of a binary protocol; for messages of varying length see \verb{$read_message()}.
+
+If the stream ends before the first byte, \verb{$read_exact()} returns \code{NULL}, so a peer that closes the connection between records is not an error. If it ends part way, or on timeout or error, the condition's \code{bytes} field gives the number of bytes read before it; those bytes are discarded. The timeout covers all the reads together. With \code{timeout = 0} it returns only if all \code{n} bytes have already arrived.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$read_exact(n, timeout = Inf, as = c("raw", "text"))}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{n}}{The number of bytes to read, a single non-negative whole number. \code{n = 0} returns \code{raw(0)} (or \code{""}) without reading.}
+      \item{\code{timeout}}{Overall seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
+      \item{\code{as}}{\code{"raw"} or \code{"text"}, as for \verb{$read()}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A raw vector or a string of \code{n} bytes, or \code{NULL} if the stream ended before the first byte.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-read_exact_async"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-read_exact_async}{}}}
+\subsection{\code{TailcatConnection$read_exact_async()}}{
+  Asynchronous version of \verb{$read_exact()}. Canceling the promise with \code{\link[=tailcat_cancel]{tailcat_cancel()}} ends the read in flight and starts no further reads.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$read_exact_async(n, timeout = Inf, as = c("raw", "text"))}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{n}}{The number of bytes to read.}
+      \item{\code{timeout}}{Overall seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
+      \item{\code{as}}{\code{"raw"} or \code{"text"}, as for \verb{$read()}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A promise resolving with a raw vector or a string, or \code{NULL} if the stream ended before the first byte.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-write_message"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-write_message}{}}}
+\subsection{\code{TailcatConnection$write_message()}}{
+  Send \code{data} as one message (TCP only), for the peer to read with \verb{$read_message()}. See the section on messages.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$write_message(data, timeout = Inf)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{data}}{A raw vector, or a character vector which is pasted together without separators and sent as UTF-8. At most 2147483647 bytes.}
+      \item{\code{timeout}}{Seconds to wait; \code{Inf} waits indefinitely and \code{0} polls. On timeout or error the condition's \code{bytes} field gives the number of bytes already sent, counting the 4-byte length; the peer then sees a partial message, so close the connection.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The number of bytes in the message, not counting its length prefix, invisibly.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-write_message_async"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-write_message_async}{}}}
+\subsection{\code{TailcatConnection$write_message_async()}}{
+  Asynchronous version of \verb{$write_message()}.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$write_message_async(data, timeout = Inf)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{data}}{A raw or character vector.}
+      \item{\code{timeout}}{Seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A promise resolving with the number of bytes in the message.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-read_message"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-read_message}{}}}
+\subsection{\code{TailcatConnection$read_message()}}{
+  Read one message sent with \verb{$write_message()} (TCP only). See the section on messages.
+
+If the stream ends cleanly between messages, \verb{$read_message()} returns \code{NULL}. If it ends part way through a message, or on timeout or error, the condition's \code{bytes} field gives the number of bytes read, counting the 4-byte length; those bytes are discarded and the connection should be closed, since the rest of the stream no longer starts at a message boundary. The timeout covers the whole message.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$read_message(
+  timeout = Inf,
+  as = c("raw", "text"),
+  max_bytes = Inf
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{timeout}}{Overall seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
+      \item{\code{as}}{\code{"raw"} or \code{"text"}, as for \verb{$read()}.}
+      \item{\code{max_bytes}}{The largest message to accept, a single non-negative whole number or \code{Inf} (the default; messages are limited to 2147483647 bytes in any case). The length is checked before the message is read: a longer message raises a \code{tailcat_failure} error with \code{bytes} set to 4, and its body is left unread, so close the connection.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A raw vector or a string, or \code{NULL} if the stream ended before the next message.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-read_message_async"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-read_message_async}{}}}
+\subsection{\code{TailcatConnection$read_message_async()}}{
+  Asynchronous version of \verb{$read_message()}. Canceling the promise with \code{\link[=tailcat_cancel]{tailcat_cancel()}} ends the read in flight and starts no further reads; a message read part way is lost.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$read_message_async(
+  timeout = Inf,
+  as = c("raw", "text"),
+  max_bytes = Inf
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{timeout}}{Overall seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
+      \item{\code{as}}{\code{"raw"} or \code{"text"}, as for \verb{$read()}.}
+      \item{\code{max_bytes}}{The largest message to accept, as for \verb{$read_message()}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A promise resolving with a raw vector or a string, or \code{NULL} if the stream ended before the next message.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-read_loop"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-read_loop}{}}}
+\subsection{\code{TailcatConnection$read_loop()}}{
+  Start an asynchronous read loop that calls \code{callback(data)} with every chunk (TCP), datagram (UDP), or message (with \code{messages = TRUE}) as it arrives, and returns immediately. See the section on read loops.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$read_loop(
+  callback,
+  on_error = NULL,
+  on_end = NULL,
+  as = c("raw", "text"),
+  messages = FALSE,
+  max_bytes = Inf
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{callback}}{A function of one argument, the data read. It may return a promise, in which case the next read starts once the promise settles.}
+      \item{\code{on_error}}{A function \verb{function(cond)} called when a read fails, the data is not acceptable (such as a message longer than \code{max_bytes}), \code{callback} signals an error, or the promise it returned rejects; or \code{NULL} to turn such errors into warnings (signaled from the later event loop). The loop then stops and the connection is closed. An error signaled by \code{on_error} itself is turned into a warning.}
+      \item{\code{on_end}}{A function of no arguments called when the peer ends a TCP stream, after the last data, or \code{NULL}. An error it signals is turned into a warning.}
+      \item{\code{as}}{\code{"raw"} or \code{"text"}, as for \verb{$read()}.}
+      \item{\code{messages}}{\code{FALSE} (the default) to deliver data as it arrives, or \code{TRUE} to deliver whole messages sent with \verb{$write_message()} (TCP only).}
+      \item{\code{max_bytes}}{The largest message to accept with \code{messages = TRUE}, as for \verb{$read_message()}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The connection, invisibly. Calling it on a connection that is already in a read loop raises a \code{tailcat_failure} error (call \verb{$stop_reading()} first), and on a closed connection a \code{tailcat_closed} error.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TailcatConnection-stop_reading"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-stop_reading}{}}}
+\subsection{\code{TailcatConnection$stop_reading()}}{
+  Stop the read loop started by \verb{$read_loop()} without closing the connection. The pending read is canceled; data whose read completed at the same moment is still passed to the callback, but a message read part way is lost, so with \code{messages = TRUE} stop only between messages or then close the connection. Calling it when no read loop is running does nothing.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TailcatConnection$stop_reading()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The connection, invisibly.
   }
 }
 

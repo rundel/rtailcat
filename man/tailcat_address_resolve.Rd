@@ -12,7 +12,7 @@ tailcat_address_resolve_async(address, derp_map_url = NULL, timeout = 30)
 \arguments{
 \item{address}{A tailcat address, as a string or the \link{tailcat_secret} returned by \code{TailcatServer$address}. Surrounding whitespace is ignored. Addresses are secrets.}
 
-\item{derp_map_url}{URL of a relay map to use instead of the default, or \code{NULL}.}
+\item{derp_map_url}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.derp_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
 
 \item{timeout}{Seconds to wait; \code{Inf} waits indefinitely and \code{0} polls (see the section on timeouts in \link{TailcatServer}).}
 }

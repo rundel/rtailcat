@@ -10,6 +10,12 @@ Initial version, embedding tailcat's Go library through its C ABI (version 1).
 - Errors are conditions of class `tailcat_error` with one subclass per C ABI status (`tailcat_invalid_argument`, `tailcat_closed`, `tailcat_timeout`, `tailcat_canceled`, `tailcat_failure`), carrying the `status` and the `bytes` transferred.
 - Addresses, private keys, and pre-shared keys are `tailcat_secret` strings that print and format as `<redacted>`; `format()` and `print()` of the R6 objects never show them. `tailcat_keygen()` creates keys for a stable server address or client identity, `allowed_clients` and `$allow_client()` restrict who may connect, and `tailcat_address_parse()`, `tailcat_address_resolve()`, and `tailcat_build_info()` inspect addresses and the embedded library.
 - The option `rtailcat.max_operations` (default 1024) caps the number of operations in flight, each of which holds an operating system thread.
+- Helpers for building protocols on top of a connection: `$write_message()` and `$read_message()` send and receive length-prefixed messages over TCP (a 4-byte big-endian length, then the bytes), with `max_bytes` checked before a message is read; `$read_exact()` reads exactly `n` bytes; `$read_loop()` and `$stop_reading()` read chunks, datagrams, or messages continuously on the event loop, like `$serve()` does for accepts. Each has an `_async()` twin where it blocks.
+- `tailcat_keys_save()`, `tailcat_keys_load()`, and `tailcat_keygen(path)` keep keys in a JSON file that only the owner can read, and `tailcat_address_write()` and `tailcat_address_read()` do the same for an address. `tailcat_reveal()` returns the plain string of a `tailcat_secret` where an application means to show it.
+- `$close(drain = )` on servers and clients waits for TCP shutdown traffic before closing.
+- `tailcat_wait()` and `tailcat_run()` run the later event loop from a script, until a promise settles or a condition holds.
+- The options `rtailcat.region` and `rtailcat.derp_map_url` set the relay for servers and clients created without those arguments.
+- `tailcat_udp_max_payload()` gives the largest UDP datagram (1232 bytes).
 
 ## Departures from the C ABI
 

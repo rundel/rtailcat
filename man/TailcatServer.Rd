@@ -41,6 +41,13 @@ Branch on the class (for example with \code{tryCatch(..., tailcat_timeout = func
 Every operation that can block (each method or function with a \code{timeout}, and fields such as \verb{$address} that ask tailcat), synchronous or asynchronous, holds its own operating system thread from the moment it starts until it ends, including while it waits its turn behind other reads or writes on a connection. The option \code{rtailcat.max_operations} caps how many such operations may be in flight in the R process at once. It must be a single positive whole number, or \code{Inf} for no cap, and defaults to 1024, which stays well below the per-process thread limits of macOS (about 6,000) and typical Linux systems and the 10,000 threads at which the Go runtime ends the process. The option is read each time an operation starts. An operation started when the cap is reached fails at once with a \code{tailcat_failure} error that names the option and gives the limit, without affecting the operations already in flight; once some of them finish or are canceled, new operations work again. If the option is set to an invalid value, every such operation fails with a \code{tailcat_failure} error saying so.
 }
 
+\section{Relay options}{
+
+The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every \verb{$new()} (including calls inside other packages' code). The option \code{rtailcat.region} is used by \code{TailcatServer$new()} when \code{region} is \code{NULL}, and \code{rtailcat.derp_map_url} by \code{TailcatServer$new()}, \code{TailcatClient$new()}, and \code{\link[=tailcat_address_resolve]{tailcat_address_resolve()}} when \code{derp_map_url} is \code{NULL}. They take the same values as the arguments, are read when the object is created, and are ignored when unset (\code{NULL}, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
+
+For example, a deployment that runs its own relay region can call \code{options(rtailcat.region = region)} at startup, and one that publishes its own relay map \code{options(rtailcat.derp_map_url = url)}.
+}
+
 \examples{
 \dontrun{
 srv = TailcatServer$new()
@@ -107,8 +114,8 @@ srv$close()
       \item{\code{key}}{Private node key: a string in tailcat's text encoding, a \code{tailcat_keys} object from \code{\link[=tailcat_keygen]{tailcat_keygen()}}, or \code{NULL} to generate one. A \code{tailcat_keys} object also supplies the pre-shared key, unless \code{preshared_key} is given. Keep the keys to reuse an address across restarts.}
       \item{\code{preshared_key}}{Pre-shared key (text encoding), or \code{NULL} to generate one (or take it from \code{key}).}
       \item{\code{region_id}}{Integer relay region to register in, or \code{NULL} to choose automatically.}
-      \item{\code{region}}{A relay region definition, as a list or a JSON string, to use instead of the public relay map. Field names may be the snake_case names used by \code{\link[=tailcat_address_parse]{tailcat_address_parse()}} (\code{region_id}, \code{region_code}, \code{nodes}, and within each node \code{name}, \code{host_name}, \code{ipv4}, \code{relay_port}, and so on) or the PascalCase names of Tailscale's \code{DERPRegion} type (\code{RegionID}, \code{Nodes}, \code{HostName}, \code{DERPPort}, and so on).}
-      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default.}
+      \item{\code{region}}{A relay region definition, as a list or a JSON string, to use instead of the public relay map, or \code{NULL} to use the \code{rtailcat.region} option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by \code{\link[=tailcat_address_parse]{tailcat_address_parse()}} (\code{region_id}, \code{region_code}, \code{nodes}, and within each node \code{name}, \code{host_name}, \code{ipv4}, \code{relay_port}, and so on) or the PascalCase names of Tailscale's \code{DERPRegion} type (\code{RegionID}, \code{Nodes}, \code{HostName}, \code{DERPPort}, and so on).}
+      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.derp_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
       \item{\code{allowed_clients}}{Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.}
       \item{\code{udp_idle_timeout}}{Seconds after which an idle UDP flow is dropped, or \code{NULL} for the default.}
     }
@@ -346,10 +353,17 @@ srv$close()
 \if{html}{\out{<a id="method-TailcatServer-close"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatServer-close}{}}}
 \subsection{\code{TailcatServer$close()}}{
-  Close the server, its listeners, and all of its connections. Pending operations on them end with a \code{tailcat_closed} error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out; to give clients a clean end of stream, close the connections and call \verb{$drain()} first.
+  Close the server, its listeners, and all of its connections. Pending operations on them end with a \code{tailcat_closed} error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out. To give clients a clean end of stream, close the connections first and pass \code{drain}, which waits for their shutdown traffic before closing (see \verb{$drain()}).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{TailcatServer$close()}
+    \preformatted{TailcatServer$close(drain = 0)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{drain}}{Seconds to wait for TCP shutdown traffic before closing, as for \verb{$drain()}; \code{0} (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.}
+    }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{

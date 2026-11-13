@@ -29,12 +29,12 @@ TailcatClient = R6::R6Class(
     #' @description Create a client. No network access happens until it is used.
     #' @param address The server's secret tailcat address (a string or a [tailcat_secret]). Surrounding whitespace, such as a trailing newline from a file, is ignored.
     #' @param key Private node key (a string in text encoding, or a `tailcat_keys` object from [tailcat_keygen()]), or `NULL` to generate one. A stable key gives the client a stable public key, for use with `allowed_clients`.
-    #' @param derp_map_url URL of a relay map to use instead of the default.
+    #' @param derp_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.derp_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
     initialize = function(address, key = NULL, derp_map_url = NULL) {
       call = rlang::caller_env()
       config = list(address = check_address(address, call = call))
       config$key = check_key(key, call = call)$private_key
-      config$derp_map_url = check_string(derp_map_url, "derp_map_url", null_ok = TRUE, call = call)
+      config$derp_map_url = check_derp_map_url(derp_map_url, call = call)
       result = rtc_client_new(to_json(config))
       if (inherits(result, "rtc_error")) {
         rtc_abort(result, op = "create the client", object = "client", arg = config_arg(result$message, names(config)), call = call)
@@ -137,9 +137,15 @@ TailcatClient = R6::R6Class(
       private$promise(function(cb) rtc_drain(private$handle, timeout, cb), function(x) self, "drain the client", timeout)
     },
 
-    #' @description Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out; to give the server a clean end of stream, close the connections and call `$drain()` first.
+    #' @description Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out. To give the server a clean end of stream, close the connections first and pass `drain`, which waits for their shutdown traffic before closing (see `$drain()`).
+    #' @param drain Seconds to wait for TCP shutdown traffic before closing, as for `$drain()`; `0` (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.
     #' @return The client, invisibly.
-    close = function() {
+    close = function(drain = 0) {
+      drain = check_timeout(drain, "drain")
+      if (drain > 0 && !self$is_closed) {
+        on.exit(rtc_close(private$handle))
+        rtc_drain(private$handle, drain, NULL)
+      }
       rtc_close(private$handle)
       invisible(self)
     },

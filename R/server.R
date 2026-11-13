@@ -32,6 +32,11 @@
 #' @section Operations in flight:
 #' Every operation that can block (each method or function with a `timeout`, and fields such as `$address` that ask tailcat), synchronous or asynchronous, holds its own operating system thread from the moment it starts until it ends, including while it waits its turn behind other reads or writes on a connection. The option `rtailcat.max_operations` caps how many such operations may be in flight in the R process at once. It must be a single positive whole number, or `Inf` for no cap, and defaults to 1024, which stays well below the per-process thread limits of macOS (about 6,000) and typical Linux systems and the 10,000 threads at which the Go runtime ends the process. The option is read each time an operation starts. An operation started when the cap is reached fails at once with a `tailcat_failure` error that names the option and gives the limit, without affecting the operations already in flight; once some of them finish or are canceled, new operations work again. If the option is set to an invalid value, every such operation fails with a `tailcat_failure` error saying so.
 #'
+#' @section Relay options:
+#' The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every `$new()` (including calls inside other packages' code). The option `rtailcat.region` is used by `TailcatServer$new()` when `region` is `NULL`, and `rtailcat.derp_map_url` by `TailcatServer$new()`, `TailcatClient$new()`, and [tailcat_address_resolve()] when `derp_map_url` is `NULL`. They take the same values as the arguments, are read when the object is created, and are ignored when unset (`NULL`, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
+#'
+#' For example, a deployment that runs its own relay region can call `options(rtailcat.region = region)` at startup, and one that publishes its own relay map `options(rtailcat.derp_map_url = url)`.
+#'
 #' @examples
 #' \dontrun{
 #' srv = TailcatServer$new()
@@ -50,8 +55,8 @@ TailcatServer = R6::R6Class(
     #' @param key Private node key: a string in tailcat's text encoding, a `tailcat_keys` object from [tailcat_keygen()], or `NULL` to generate one. A `tailcat_keys` object also supplies the pre-shared key, unless `preshared_key` is given. Keep the keys to reuse an address across restarts.
     #' @param preshared_key Pre-shared key (text encoding), or `NULL` to generate one (or take it from `key`).
     #' @param region_id Integer relay region to register in, or `NULL` to choose automatically.
-    #' @param region A relay region definition, as a list or a JSON string, to use instead of the public relay map. Field names may be the snake_case names used by [tailcat_address_parse()] (`region_id`, `region_code`, `nodes`, and within each node `name`, `host_name`, `ipv4`, `relay_port`, and so on) or the PascalCase names of Tailscale's `DERPRegion` type (`RegionID`, `Nodes`, `HostName`, `DERPPort`, and so on).
-    #' @param derp_map_url URL of a relay map to use instead of the default.
+    #' @param region A relay region definition, as a list or a JSON string, to use instead of the public relay map, or `NULL` to use the `rtailcat.region` option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by [tailcat_address_parse()] (`region_id`, `region_code`, `nodes`, and within each node `name`, `host_name`, `ipv4`, `relay_port`, and so on) or the PascalCase names of Tailscale's `DERPRegion` type (`RegionID`, `Nodes`, `HostName`, `DERPPort`, and so on).
+    #' @param derp_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.derp_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
     #' @param allowed_clients Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.
     #' @param udp_idle_timeout Seconds after which an idle UDP flow is dropped, or `NULL` for the default.
     initialize = function(key = NULL, preshared_key = NULL, region_id = NULL, region = NULL, derp_map_url = NULL, allowed_clients = NULL, udp_idle_timeout = NULL) {
@@ -69,8 +74,10 @@ TailcatServer = R6::R6Class(
       }
       if (!is.null(region)) {
         config$region = check_region(region, call = call)
+      } else if (!is.null(getOption("rtailcat.region"))) {
+        config$region = check_region(getOption("rtailcat.region"), "The {.code rtailcat.region} option", call = call)
       }
-      config$derp_map_url = check_string(derp_map_url, "derp_map_url", null_ok = TRUE, call = call)
+      config$derp_map_url = check_derp_map_url(derp_map_url, call = call)
       if (!is.null(allowed_clients)) {
         if (!is.character(allowed_clients) || anyNA(allowed_clients)) {
           abort_invalid("{.arg allowed_clients} must be a character vector of public keys.", call = call)
@@ -192,9 +199,15 @@ TailcatServer = R6::R6Class(
       private$promise(function(cb) rtc_drain(private$handle, timeout, cb), function(x) self, "drain the server", timeout)
     },
 
-    #' @description Close the server, its listeners, and all of its connections. Pending operations on them end with a `tailcat_closed` error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out; to give clients a clean end of stream, close the connections and call `$drain()` first.
+    #' @description Close the server, its listeners, and all of its connections. Pending operations on them end with a `tailcat_closed` error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out. To give clients a clean end of stream, close the connections first and pass `drain`, which waits for their shutdown traffic before closing (see `$drain()`).
+    #' @param drain Seconds to wait for TCP shutdown traffic before closing, as for `$drain()`; `0` (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.
     #' @return The server, invisibly.
-    close = function() {
+    close = function(drain = 0) {
+      drain = check_timeout(drain, "drain")
+      if (drain > 0 && !self$is_closed) {
+        on.exit(rtc_close(private$handle))
+        rtc_drain(private$handle, drain, NULL)
+      }
       rtc_close(private$handle)
       invisible(self)
     },
@@ -315,15 +328,15 @@ check_key = function(key, call = parent.frame()) {
   list(private_key = check_string(key, "key", call = call))
 }
 
-check_region = function(region, call = parent.frame()) {
+check_region = function(region, what = "{.arg region}", call = parent.frame()) {
   if (is.character(region) && length(region) == 1 && !is.na(region)) {
     region = tryCatch(
       jsonlite::fromJSON(region, simplifyVector = FALSE),
-      error = function(e) abort_invalid("{.arg region} is not valid JSON.", call = call)
+      error = function(e) abort_invalid(paste(what, "is not valid JSON."), call = call)
     )
   }
   if (!is.list(region)) {
-    abort_invalid("{.arg region} must be a list or a JSON string.", call = call)
+    abort_invalid(paste(what, "must be a list or a JSON string."), call = call)
   }
   upstream_fields(region)
 }

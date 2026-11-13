@@ -37,8 +37,7 @@ library(rtailcat)
 
 srv = TailcatServer$new()
 lst = srv$listen(8080)
-writeLines(srv$address, "address.txt")
-Sys.chmod("address.txt", "600")
+tailcat_address_write(srv, "address.txt")
 
 conn = lst$accept()
 msg = conn$read_all(as = "text")
@@ -46,8 +45,7 @@ conn$write(paste0("server received: ", msg))
 conn$close_write()
 conn$close()
 
-srv$drain()
-srv$close()
+srv$close(drain = 5)
 ```
 
 Run the client in a second R session, on the same machine or anywhere else:
@@ -55,7 +53,7 @@ Run the client in a second R session, on the same machine or anywhere else:
 ```r
 library(rtailcat)
 
-cl = TailcatClient$new(readLines("address.txt"))
+cl = TailcatClient$new(tailcat_address_read("address.txt"))
 conn = cl$dial(8080)
 conn$write("hello from the client")
 conn$close_write()
@@ -63,19 +61,20 @@ conn$read_all(as = "text")
 #> [1] "server received: hello from the client"
 conn$close()
 
-cl$drain()
-cl$close()
+cl$close(drain = 5)
 ```
 
 Reads return raw vectors by default; `as = "text"` returns a UTF-8 string instead. Over TCP a single `$read()` can end in the middle of a multibyte character, so use `$read_all(as = "text")`, or read raw bytes and convert them once, for multibyte text. Data containing NUL bytes cannot be read as text and raises an error.
 
 `$read_all()` keeps the whole stream in memory, so give it a limit when the peer is not trusted: `conn$read_all(max_bytes = 1e6)` raises a `tailcat_failure` error as soon as the stream turns out to be longer than a million bytes. The bytes read are discarded, but the connection stays open.
 
-`$close_write()` tells the other side that you have finished sending (it then reads end of stream, so `$read_all()` returns), while still letting you read the reply. `$drain()` waits briefly for TCP shutdown traffic to finish so the peer sees a clean close; call it before closing a client or server or quitting R.
+For a conversation with several messages in each direction, use `$write_message()` and `$read_message()`: each `$read_message()` returns exactly what one `$write_message()` sent, however TCP split it up on the way, and returns `NULL` once the other side has ended the stream. Give `$read_message()` a `max_bytes` when the peer is not trusted; a longer message is refused before it is read. `$read_exact(n)` reads exactly `n` bytes, for fixed-size fields of other binary protocols.
 
-Use `network = "udp"` in `$listen()` and `$dial()` for datagrams: each `$write()` sends one datagram of at most 1232 bytes and each `$read()` returns one. A UDP flow appears at the listener once the client has sent its first datagram.
+`$close_write()` tells the other side that you have finished sending (it then reads end of stream, so `$read_all()` returns), while still letting you read the reply. `$close(drain = 5)` on a client or server first waits up to five seconds for TCP shutdown traffic to finish, so the peer sees a clean close; close the connections before that.
 
-A few helpers round this out: `cl$ping()` and `cl$disco_ping()` measure latency to the server in seconds (the latter also reports whether the path is direct or through a relay), `tailcat_address_parse()` shows the public parts of an address without revealing its pre-shared key, and `tailcat_build_info()` reports the embedded tailcat and Go versions.
+Use `network = "udp"` in `$listen()` and `$dial()` for datagrams: each `$write()` sends one datagram of at most 1232 bytes (`tailcat_udp_max_payload()`) and each `$read()` returns one. A UDP flow appears at the listener once the client has sent its first datagram.
+
+A few helpers round this out: `cl$ping()` and `cl$disco_ping()` measure latency to the server in seconds (the latter also reports whether the path is direct or through a relay), `tailcat_address_parse()` shows the public parts of an address without revealing its pre-shared key, and `tailcat_build_info()` reports the embedded tailcat and Go versions. To use your own relay for every server and client in a session, including ones created inside other packages, set the options `rtailcat.region` or `rtailcat.derp_map_url` (see `?TailcatServer`).
 
 ## Serving connections asynchronously
 
@@ -93,17 +92,20 @@ lst$serve(function(conn) {
     conn$close()
   })
 })
-writeLines(srv$address, "address.txt")
-Sys.chmod("address.txt", "600")
+tailcat_address_write(srv, "address.txt")
 ```
 
 The loop only makes progress while the event loop runs, which happens automatically when the R console is idle and inside Shiny or httpuv apps. In a script run with `Rscript`, keep it running explicitly:
 
 ```r
-while (!lst$is_closed) later::run_now(Inf)
+tailcat_run(until = function() lst$is_closed)
 ```
 
 A handler error, or a rejection of the promise the handler returns (as in the example above), is passed to `on_error` if you give one (`lst$serve(handler, on_error = function(cond, conn) ...)`), otherwise it becomes a warning; either way that connection is closed and the loop carries on. Closing the listener or the server ends the loop; `lst$stop_serving()` ends it but keeps the listener open. Blocking calls inside a handler hold up the event loop until they return, so prefer the `_async()` methods there.
+
+`conn$read_loop(callback)` is the reading counterpart of `$serve()`: it calls `callback` with each chunk, UDP datagram, or (with `messages = TRUE`) message as it arrives, waits for a promise the callback returns before reading on, and stops at the end of the stream (calling `on_end`), on `conn$stop_reading()`, or on an error (calling `on_error` and closing the connection).
+
+In a script, `tailcat_wait(promise, timeout)` runs the event loop until a promise settles and returns its value, so `conn = tailcat_wait(cl$dial_async(8080))` works like the blocking call.
 
 The other asynchronous methods work the same way, for example `cl$dial_async(8080)` or `srv$listen_async(0)`. Promises reject with the same error conditions the blocking methods raise. Reads, and writes, on one connection run in the order they are started, so several `$write_async()` calls send their data in call order, while a read and a write can run at the same time. A promise is settled on the later event loop that was current when the operation started, for example inside `later::with_temp_loop()`; if that loop is destroyed first, the result is delivered on the global loop instead.
 
@@ -159,9 +161,9 @@ Blocking calls can be interrupted with Ctrl-C or Esc. If the operation completes
 
 ## Security
 
-A tailcat address is a credential. It contains the server's public key, relay details, and a pre-shared key, and anyone who has it can connect to every port the server listens on. Share it privately and do not commit it, log it, or paste it into chats or issues. Addresses, private keys, and pre-shared keys are returned as `tailcat_secret` strings: `print()`, `format()`, and `str()` show `<redacted>`, as do `print()` and `str()` of lists that contain them (`format()` of a plain list only redacts from R 4.6.0; the lists this package returns redact in every version), while `writeLines()`, `paste()`, `as.character()`, and the functions of this package use the full value. `dput()`, `saveRDS()`, and explicit conversions reveal the value, so store secrets deliberately. Servers fetch their address from tailcat when asked instead of keeping it in R, so saving a server object does not write its address to disk.
+A tailcat address is a credential. It contains the server's public key, relay details, and a pre-shared key, and anyone who has it can connect to every port the server listens on. Share it privately and do not commit it, log it, or paste it into chats or issues. Addresses, private keys, and pre-shared keys are returned as `tailcat_secret` strings: `print()`, `format()`, and `str()` show `<redacted>`, as do `print()` and `str()` of lists that contain them (`format()` of a plain list only redacts from R 4.6.0; the lists this package returns redact in every version), while `writeLines()`, `paste()`, `as.character()`, and the functions of this package use the full value. `dput()`, `saveRDS()`, and explicit conversions reveal the value, so store secrets deliberately: `tailcat_reveal()` returns the plain string where you mean to show an address, and `tailcat_address_write()` and `tailcat_keys_save()` write files that only you can read. Servers fetch their address from tailcat when asked instead of keeping it in R, so saving a server object does not write its address to disk.
 
-By default each server gets a new key pair and address. To keep an address across restarts, create the keys once with `tailcat_keygen()`, store them securely, and pass them back with `TailcatServer$new(key = keys)`, which uses both the private key and the pre-shared key. To accept only particular clients, give them stable keys (`TailcatClient$new(address, key = keys)`) and list their public keys in `allowed_clients` or add them with `$allow_client()`.
+By default each server gets a new key pair and address. To keep an address across restarts, create the keys with `keys = tailcat_keygen("~/.config/myapp/keys.json")`, which saves them to a file only you can read the first time and loads them from it afterwards, and pass them to `TailcatServer$new(key = keys)`, which uses both the private key and the pre-shared key. To accept only particular clients, give them stable keys (`TailcatClient$new(address, key = keys)`) and list their public keys in `allowed_clients` or add them with `$allow_client()`.
 
 ## Caveats
 

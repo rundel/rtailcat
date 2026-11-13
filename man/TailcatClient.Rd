@@ -68,7 +68,7 @@ cli$close()
     \describe{
       \item{\code{address}}{The server's secret tailcat address (a string or a \link{tailcat_secret}). Surrounding whitespace, such as a trailing newline from a file, is ignored.}
       \item{\code{key}}{Private node key (a string in text encoding, or a \code{tailcat_keys} object from \code{\link[=tailcat_keygen]{tailcat_keygen()}}), or \code{NULL} to generate one. A stable key gives the client a stable public key, for use with \code{allowed_clients}.}
-      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default.}
+      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.derp_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
     }
     \if{html}{\out{</div>}}
   }
@@ -302,10 +302,17 @@ cli$close()
 \if{html}{\out{<a id="method-TailcatClient-close"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatClient-close}{}}}
 \subsection{\code{TailcatClient$close()}}{
-  Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out; to give the server a clean end of stream, close the connections and call \verb{$drain()} first.
+  Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out. To give the server a clean end of stream, close the connections first and pass \code{drain}, which waits for their shutdown traffic before closing (see \verb{$drain()}).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{TailcatClient$close()}
+    \preformatted{TailcatClient$close(drain = 0)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{drain}}{Seconds to wait for TCP shutdown traffic before closing, as for \verb{$drain()}; \code{0} (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.}
+    }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{

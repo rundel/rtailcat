@@ -258,10 +258,11 @@ to the usual R toolchain.
   loop ids, and `exists_loop()` date from 1.0.0), R6 2.1.2
   (`format.R6()` calls a public `$format()`), cli 3.4.0
   (`{.obj_type_friendly}`), rlang 1.0.0 (`frame_call()`).
-  `Depends: R (>= 4.0.0)` is what cpp11 0.5.1 and later require, and
-  keeps `R CMD check` from noting that versioned `LinkingTo` needs R \>=
-  3.0.2. promises, jsonlite, and the Suggests have no established
-  minimum.
+  `Depends: R (>= 4.1.0)` is for the native pipe and `\(x)` lambdas in
+  the vignette examples (`inst/examples/`); cpp11 0.5.1 and later need R
+  4.0.0, and any R dependency keeps `R CMD check` from noting that
+  versioned `LinkingTo` needs R \>= 3.0.2. promises, jsonlite, and the
+  Suggests have no established minimum.
 - `./cleanup` removes all build outputs, including the Go caches from a
   hermetic build.
 

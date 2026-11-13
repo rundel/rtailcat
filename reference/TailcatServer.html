@@ -24,6 +24,10 @@ Once a server is closed, every method other than $close(), $format(), and $print
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -68,6 +72,13 @@ Once a server is closed, every method other than $close(), $format(), and $print
 
 
 <p>Every operation that can block (each method or function with a <code>timeout</code>, and fields such as <code>$address</code> that ask tailcat), synchronous or asynchronous, holds its own operating system thread from the moment it starts until it ends, including while it waits its turn behind other reads or writes on a connection. The option <code>rtailcat.max_operations</code> caps how many such operations may be in flight in the R process at once. It must be a single positive whole number, or <code>Inf</code> for no cap, and defaults to 1024, which stays well below the per-process thread limits of macOS (about 6,000) and typical Linux systems and the 10,000 threads at which the Go runtime ends the process. The option is read each time an operation starts. An operation started when the cap is reached fails at once with a <code>tailcat_failure</code> error that names the option and gives the limit, without affecting the operations already in flight; once some of them finish or are canceled, new operations work again. If the option is set to an invalid value, every such operation fails with a <code>tailcat_failure</code> error saying so.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="relay-options">Relay options<a class="anchor" aria-label="anchor" href="#relay-options"></a></h2>
+
+
+<p>The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every <code>$new()</code> (including calls inside other packages' code). The option <code>rtailcat.region</code> is used by <code>TailcatServer$new()</code> when <code>region</code> is <code>NULL</code>, and <code>rtailcat.derp_map_url</code> by <code>TailcatServer$new()</code>, <code>TailcatClient$new()</code>, and <code><a href="tailcat_address_resolve.html">tailcat_address_resolve()</a></code> when <code>derp_map_url</code> is <code>NULL</code>. They take the same values as the arguments, are read when the object is created, and are ignored when unset (<code>NULL</code>, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.</p>
+<p>For example, a deployment that runs its own relay region can call <code>options(rtailcat.region = region)</code> at startup, and one that publishes its own relay map <code>options(rtailcat.derp_map_url = url)</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="active-bindings">Active bindings<a class="anchor" aria-label="anchor" href="#active-bindings"></a></h2>
@@ -133,10 +144,10 @@ Once a server is closed, every method other than $close(), $format(), and $print
 <dd><p>Integer relay region to register in, or <code>NULL</code> to choose automatically.</p></dd>
 
       <dt><code>region</code></dt>
-<dd><p>A relay region definition, as a list or a JSON string, to use instead of the public relay map. Field names may be the snake_case names used by <code><a href="tailcat_address_parse.html">tailcat_address_parse()</a></code> (<code>region_id</code>, <code>region_code</code>, <code>nodes</code>, and within each node <code>name</code>, <code>host_name</code>, <code>ipv4</code>, <code>relay_port</code>, and so on) or the PascalCase names of Tailscale's <code>DERPRegion</code> type (<code>RegionID</code>, <code>Nodes</code>, <code>HostName</code>, <code>DERPPort</code>, and so on).</p></dd>
+<dd><p>A relay region definition, as a list or a JSON string, to use instead of the public relay map, or <code>NULL</code> to use the <code>rtailcat.region</code> option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by <code><a href="tailcat_address_parse.html">tailcat_address_parse()</a></code> (<code>region_id</code>, <code>region_code</code>, <code>nodes</code>, and within each node <code>name</code>, <code>host_name</code>, <code>ipv4</code>, <code>relay_port</code>, and so on) or the PascalCase names of Tailscale's <code>DERPRegion</code> type (<code>RegionID</code>, <code>Nodes</code>, <code>HostName</code>, <code>DERPPort</code>, and so on).</p></dd>
 
       <dt><code>derp_map_url</code></dt>
-<dd><p>URL of a relay map to use instead of the default.</p></dd>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in TailcatServer) or, when that is unset, the default.</p></dd>
 
       <dt><code>allowed_clients</code></dt>
 <dd><p>Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.</p></dd>
@@ -360,9 +371,16 @@ Once a server is closed, every method other than $close(), $format(), and $print
 
 <p></p><hr><a id="method-TailcatServer-close"></a><div class="section">
 <h3 id="tailcatserver-close-"><code>TailcatServer$close()</code><a class="anchor" aria-label="anchor" href="#tailcatserver-close-"></a></h3>
-<p>Close the server, its listeners, and all of its connections. Pending operations on them end with a <code>tailcat_closed</code> error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out; to give clients a clean end of stream, close the connections and call <code>$drain()</code> first.</p><div class="section">
+<p>Close the server, its listeners, and all of its connections. Pending operations on them end with a <code>tailcat_closed</code> error. Closing twice is harmless. Closing tears the server down immediately, so clients may not see the end of their streams until their own reads time out. To give clients a clean end of stream, close the connections first and pass <code>drain</code>, which waits for their shutdown traffic before closing (see <code>$drain()</code>).</p><div class="section">
 <h4 id="usage-11">Usage<a class="anchor" aria-label="anchor" href="#usage-11"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatServer</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatServer</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div><p></p></div>
+</div><p></p><div class="section">
+<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
+<p></p><div class="arguments"><dl><dt><code>drain</code></dt>
+<dd><p>Seconds to wait for TCP shutdown traffic before closing, as for <code>$drain()</code>; <code>0</code> (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.</p></dd>
+
+
+</dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-10">Returns<a class="anchor" aria-label="anchor" href="#returns-10"></a></h4>
 <p>The server, invisibly.</p>
@@ -376,7 +394,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 <h4 id="usage-12">Usage<a class="anchor" aria-label="anchor" href="#usage-12"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatServer</span><span class="op">$</span><span class="fu">format</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
+<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Ignored.</p></dd>
 
@@ -395,7 +413,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 <h4 id="usage-13">Usage<a class="anchor" aria-label="anchor" href="#usage-13"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatServer</span><span class="op">$</span><span class="fu">print</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
+<h4 id="arguments-13">Arguments<a class="anchor" aria-label="anchor" href="#arguments-13"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Ignored.</p></dd>
 

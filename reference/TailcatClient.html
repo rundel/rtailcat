@@ -24,6 +24,10 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -95,7 +99,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 <dd><p>Private node key (a string in text encoding, or a <code>tailcat_keys</code> object from <code><a href="tailcat_keygen.html">tailcat_keygen()</a></code>), or <code>NULL</code> to generate one. A stable key gives the client a stable public key, for use with <code>allowed_clients</code>.</p></dd>
 
       <dt><code>derp_map_url</code></dt>
-<dd><p>URL of a relay map to use instead of the default.</p></dd>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
 
 
 </dl><p></p></div>
@@ -307,9 +311,16 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 
 <p></p><hr><a id="method-TailcatClient-close"></a><div class="section">
 <h3 id="tailcatclient-close-"><code>TailcatClient$close()</code><a class="anchor" aria-label="anchor" href="#tailcatclient-close-"></a></h3>
-<p>Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out; to give the server a clean end of stream, close the connections and call <code>$drain()</code> first.</p><div class="section">
+<p>Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out. To give the server a clean end of stream, close the connections first and pass <code>drain</code>, which waits for their shutdown traffic before closing (see <code>$drain()</code>).</p><div class="section">
 <h4 id="usage-11">Usage<a class="anchor" aria-label="anchor" href="#usage-11"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatClient</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatClient</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div><p></p></div>
+</div><p></p><div class="section">
+<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
+<p></p><div class="arguments"><dl><dt><code>drain</code></dt>
+<dd><p>Seconds to wait for TCP shutdown traffic before closing, as for <code>$drain()</code>; <code>0</code> (the default) closes at once. A drain that times out or fails does not prevent the close and is not reported.</p></dd>
+
+
+</dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-10">Returns<a class="anchor" aria-label="anchor" href="#returns-10"></a></h4>
 <p>The client, invisibly.</p>
@@ -323,7 +334,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 <h4 id="usage-12">Usage<a class="anchor" aria-label="anchor" href="#usage-12"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatClient</span><span class="op">$</span><span class="fu">format</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
+<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Ignored.</p></dd>
 
@@ -342,7 +353,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 <h4 id="usage-13">Usage<a class="anchor" aria-label="anchor" href="#usage-13"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatClient</span><span class="op">$</span><span class="fu">print</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
+<h4 id="arguments-13">Arguments<a class="anchor" aria-label="anchor" href="#arguments-13"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Ignored.</p></dd>
 

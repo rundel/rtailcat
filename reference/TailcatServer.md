@@ -102,6 +102,24 @@ of them finish or are canceled, new operations work again. If the option
 is set to an invalid value, every such operation fails with a
 `tailcat_failure` error saying so.
 
+## Relay options
+
+The relay used by servers and clients can be set once for the R session
+with options, instead of passing the same arguments to every `$new()`
+(including calls inside other packages' code). The option
+`rtailcat.region` is used by `TailcatServer$new()` when `region` is
+`NULL`, and `rtailcat.derp_map_url` by `TailcatServer$new()`,
+`TailcatClient$new()`, and
+[`tailcat_address_resolve()`](https://rundel.github.io/rtailcat/reference/tailcat_address_resolve.md)
+when `derp_map_url` is `NULL`. They take the same values as the
+arguments, are read when the object is created, and are ignored when
+unset (`NULL`, the default). An argument given explicitly always wins;
+to go back to the default relays, unset the option.
+
+For example, a deployment that runs its own relay region can call
+`options(rtailcat.region = region)` at startup, and one that publishes
+its own relay map `options(rtailcat.derp_map_url = url)`.
+
 ## Active bindings
 
 - `address`:
@@ -200,8 +218,9 @@ started (by `$start()` or `$listen()`). Only arguments that are not
 - `region`:
 
   A relay region definition, as a list or a JSON string, to use instead
-  of the public relay map. Field names may be the snake_case names used
-  by
+  of the public relay map, or `NULL` to use the `rtailcat.region` option
+  (see the section on relay options) or, when that is unset, the public
+  relays. Field names may be the snake_case names used by
   [`tailcat_address_parse()`](https://rundel.github.io/rtailcat/reference/tailcat_address_parse.md)
   (`region_id`, `region_code`, `nodes`, and within each node `name`,
   `host_name`, `ipv4`, `relay_port`, and so on) or the PascalCase names
@@ -210,7 +229,9 @@ started (by `$start()` or `$listen()`). Only arguments that are not
 
 - `derp_map_url`:
 
-  URL of a relay map to use instead of the default.
+  URL of a relay map to use instead of the default, or `NULL` to use the
+  `rtailcat.derp_map_url` option (see the section on relay options in
+  TailcatServer) or, when that is unset, the default.
 
 - `allowed_clients`:
 
@@ -467,13 +488,22 @@ A promise resolving with the server.
 Close the server, its listeners, and all of its connections. Pending
 operations on them end with a `tailcat_closed` error. Closing twice is
 harmless. Closing tears the server down immediately, so clients may not
-see the end of their streams until their own reads time out; to give
-clients a clean end of stream, close the connections and call `$drain()`
-first.
+see the end of their streams until their own reads time out. To give
+clients a clean end of stream, close the connections first and pass
+`drain`, which waits for their shutdown traffic before closing (see
+`$drain()`).
 
 #### Usage
 
-    TailcatServer$close()
+    TailcatServer$close(drain = 0)
+
+#### Arguments
+
+- `drain`:
+
+  Seconds to wait for TCP shutdown traffic before closing, as for
+  `$drain()`; `0` (the default) closes at once. A drain that times out
+  or fails does not prevent the close and is not reported.
 
 #### Returns
 

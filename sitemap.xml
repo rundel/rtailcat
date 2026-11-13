@@ -2,6 +2,8 @@
 <url><loc>https://rundel.github.io/rtailcat/404.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/CLAUDE.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/LICENSE-text.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/articles/building-on-rtailcat.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/articles/index.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/authors.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/index.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/news/index.html</loc></url>
@@ -13,9 +15,14 @@
 <url><loc>https://rundel.github.io/rtailcat/reference/rtailcat-package.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_address_parse.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_address_resolve.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/reference/tailcat_address_write.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_build_info.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_cancel.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_keygen.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/reference/tailcat_keys_save.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/reference/tailcat_reveal.html</loc></url>
 <url><loc>https://rundel.github.io/rtailcat/reference/tailcat_secret.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/reference/tailcat_udp_max_payload.html</loc></url>
+<url><loc>https://rundel.github.io/rtailcat/reference/tailcat_wait.html</loc></url>
 </urlset>
 

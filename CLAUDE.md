@@ -99,11 +99,19 @@ Key native-layer rules:
   attaches a canceler function as the `rtailcat_cancel` attribute of the
   promise, and
   [`tailcat_cancel()`](https://rundel.github.io/rtailcat/reference/tailcat_cancel.md)
-  calls it. Multi-step helpers (`read_all_async()`) attach their own
-  canceler that cancels the step in flight and stops further steps.
-  `TailcatListener$stop_serving()` uses the same handle to cancel the
-  serve loop’s pending accept; a generation counter keeps late callbacks
-  from an old loop from touching a new one.
+  calls it. Multi-step reads (`read_all`, `read_exact`, `read_message`,
+  and the read loop) are reader objects in `R/reading.R`
+  (`start`/`want`/`feed`/`total`), run by one driver for blocking calls
+  (`run_reader()`) and one for asynchronous calls (`start_reader()`,
+  wrapped by `reader_promise()`); the asynchronous driver returns a
+  canceler that cancels the step in flight and stops further steps, and
+  the promise carries it. A new multi-step read should be a reader, not
+  its own loop. `TailcatListener$stop_serving()` uses the same handle to
+  cancel the serve loop’s pending accept, and
+  `TailcatConnection$stop_reading()` the read loop’s canceler; in both a
+  generation counter keeps late callbacks from an old loop from touching
+  a new one, and a result that completed as the loop was stopped is
+  still delivered rather than dropped.
 - Addresses, private keys, and pre-shared keys reach users as
   `tailcat_secret` (`R/secret.R`): a classed character vector whose
   `print`, `format`, `str`, and `toString` methods redact. Validation
@@ -214,7 +222,8 @@ to the usual R toolchain.
   `go env -w`) cannot change it. The command lines still pass their own
   flags.
 - `src/rtailcat-win.def` limits the Windows DLL’s exports to
-  `R_init_rtailcat` (untested, like the rest of the Windows build).
+  `R_init_rtailcat`. The Windows build passes in CI; whether the export
+  list is in fact limited has not been inspected.
 - The Go build is a make rule in `src/Makevars.in`; outputs go to
   `src/go/build/`.
 - Default mode uses the user’s normal Go caches and downloads the
@@ -265,8 +274,11 @@ network tests against the local relay. The check uses
 which means a new warning does not fail CI; read the check log when
 changing compiled code or docs.
 
-Only macOS arm64 has been tested. `configure.win`, `src/Makevars.win`,
-and the Linux version script `src/rtailcat.map` are best effort.
+Tested platforms: macOS arm64 (development and CI), Ubuntu x86_64 on R
+devel, release, and oldrel-1 (CI), and Windows x86_64 with Rtools (CI).
+On Windows the interrupt test and the fork test are skipped, so
+interrupting a blocking call is untested there. macOS x86_64 is
+untested.
 
 ## Common commands
 
@@ -336,6 +348,47 @@ R CMD build . && R CMD check --no-manual rtailcat_*.tar.gz
   was checked by running it under `sandbox-exec` with all non-loopback
   outbound traffic denied.
 
+## Vignette
+
+- `vignettes/building-on-rtailcat.qmd` (Quarto,
+  `VignetteBuilder: quarto`, so building it needs the quarto CLI; both
+  CI workflows install it) shows three example “packages” built on
+  rtailcat: wormhole, remote, and progress. Every cell is `eval: false`
+  (set in the front matter); the output is stored in the cells as `#>`
+  lines.
+- The vignette is the source of the example code. Cells labeled
+  `<example>-def-<name>` are concatenated into
+  `inst/examples/<example>.R` (generated; never edit them), which
+  `tests/testthat/test-examples.R` sources. Usage cells carry
+  `class-source: <side>` (which machine runs them; the CSS at the top of
+  the vignette labels them), optionally `blocks: true` (the cell waits
+  on the other side, such as a server) or `run: false` (not run, such as
+  the Shiny app). Cells without either are not run.
+- `Rscript tools/vignette.R` (needs q2r from github.com/rundel/q2r, plus
+  Go for the relay) checks that `inst/examples/` matches the vignette
+  and reruns every usage cell, each side in its own R process
+  (`tools/vignette-side.R`) against the local test relay, and reports
+  differences in the recorded output; `--update` rewrites
+  `inst/examples/` and the cells, through q2r’s tree-sitter tree so the
+  rest of the file stays byte for byte the same. Name examples to run
+  only those. `RTAILCAT_VIGNETTE_KEEP=<dir>` keeps each run’s directory
+  (cell code, streamed output, process logs) there for debugging. It
+  never runs during a render or `R CMD check`.
+- The run replaces addresses and public keys with placeholders
+  (`tcAbC...xYz`, `nodekey:3f1c...9a0e`, …) in order of first appearance
+  within an example, and puts the real values back into code that uses a
+  placeholder, so placeholders in the vignette’s code must match that
+  order. The examples call `TailcatServer$new()` and
+  `TailcatClient$new()` without relay arguments; the side processes and
+  `test-examples.R` (including its child processes) set the
+  `rtailcat.region` and `rtailcat.derp_map_url` options to the test
+  relay instead. The rest of the suite does not set the options
+  globally, because tests that pass only `derp_map_url` (such as those
+  using `silent_map_url()`) would then also get the region.
+- `--update` replaces a cell’s code with what actually ran, so a cell
+  whose run stopped early loses its later lines; check the diff before
+  committing.
+
 ## Known issues
 
 Both issues below are upstream tailcat bugs, written up for upstream in
@@ -377,6 +430,27 @@ includes a fix.
 - Choice arguments (`network`, `as`) go through `match_choice()`: the
   untouched default means its first value, otherwise exactly one value,
   with no partial matching or case folding.
+- Messages (`$write_message()`, `$read_message()`,
+  `read_loop(messages = TRUE)`) are a 4-byte unsigned big-endian length
+  followed by the bytes; this is a documented wire format, so do not
+  change it. rtailcat sends and accepts at most `.Machine$integer.max`
+  bytes per message. They are TCP only (UDP datagrams are already
+  messages).
+- Secret files
+  ([`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md),
+  [`tailcat_address_write()`](https://rundel.github.io/rtailcat/reference/tailcat_address_write.md))
+  go through `write_private()` in `R/files.R`: written under
+  `Sys.umask("077")` to a temporary file in the target folder and
+  renamed into place, refusing to overwrite unless `overwrite = TRUE`.
+  Readers warn (`tailcat_warning`) when the file is readable by group or
+  others. Keys files are JSON with `private_key`, `public_key`,
+  `preshared_key`; address files are one line.
+- Relay options `rtailcat.region` (servers) and `rtailcat.derp_map_url`
+  (servers, clients,
+  [`tailcat_address_resolve()`](https://rundel.github.io/rtailcat/reference/tailcat_address_resolve.md))
+  are read at creation and used only when the argument is `NULL`; an
+  explicit argument always wins. Invalid option values raise
+  `tailcat_invalid_argument` naming the option.
 - Keys: `key =` everywhere. `TailcatServer$new(key = )` takes a string
   or a `tailcat_keys` object (whose pre-shared key it uses unless
   `preshared_key` is given); `check_key()` rejects incomplete

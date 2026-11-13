@@ -16,6 +16,10 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -43,6 +47,16 @@
 <li>Errors are conditions of class <code>tailcat_error</code> with one subclass per C ABI status (<code>tailcat_invalid_argument</code>, <code>tailcat_closed</code>, <code>tailcat_timeout</code>, <code>tailcat_canceled</code>, <code>tailcat_failure</code>), carrying the <code>status</code> and the <code>bytes</code> transferred.</li>
 <li>Addresses, private keys, and pre-shared keys are <code>tailcat_secret</code> strings that print and format as <code>&lt;redacted&gt;</code>; <code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code> and <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> of the R6 objects never show them. <code><a href="../reference/tailcat_keygen.html">tailcat_keygen()</a></code> creates keys for a stable server address or client identity, <code>allowed_clients</code> and <code>$allow_client()</code> restrict who may connect, and <code><a href="../reference/tailcat_address_parse.html">tailcat_address_parse()</a></code>, <code><a href="../reference/tailcat_address_resolve.html">tailcat_address_resolve()</a></code>, and <code><a href="../reference/tailcat_build_info.html">tailcat_build_info()</a></code> inspect addresses and the embedded library.</li>
 <li>The option <code>rtailcat.max_operations</code> (default 1024) caps the number of operations in flight, each of which holds an operating system thread.</li>
+<li>Helpers for building protocols on top of a connection: <code>$write_message()</code> and <code>$read_message()</code> send and receive length-prefixed messages over TCP (a 4-byte big-endian length, then the bytes), with <code>max_bytes</code> checked before a message is read; <code>$read_exact()</code> reads exactly <code>n</code> bytes; <code>$read_loop()</code> and <code>$stop_reading()</code> read chunks, datagrams, or messages continuously on the event loop, like <code>$serve()</code> does for accepts. Each has an <code>_async()</code> twin where it blocks.</li>
+<li>
+<code><a href="../reference/tailcat_keys_save.html">tailcat_keys_save()</a></code>, <code><a href="../reference/tailcat_keys_save.html">tailcat_keys_load()</a></code>, and <code>tailcat_keygen(path)</code> keep keys in a JSON file that only the owner can read, and <code><a href="../reference/tailcat_address_write.html">tailcat_address_write()</a></code> and <code><a href="../reference/tailcat_address_write.html">tailcat_address_read()</a></code> do the same for an address. <code><a href="../reference/tailcat_reveal.html">tailcat_reveal()</a></code> returns the plain string of a <code>tailcat_secret</code> where an application means to show it.</li>
+<li>
+<code>$close(drain = )</code> on servers and clients waits for TCP shutdown traffic before closing.</li>
+<li>
+<code><a href="../reference/tailcat_wait.html">tailcat_wait()</a></code> and <code><a href="../reference/tailcat_wait.html">tailcat_run()</a></code> run the later event loop from a script, until a promise settles or a condition holds.</li>
+<li>The options <code>rtailcat.region</code> and <code>rtailcat.derp_map_url</code> set the relay for servers and clients created without those arguments.</li>
+<li>
+<code><a href="../reference/tailcat_udp_max_payload.html">tailcat_udp_max_payload()</a></code> gives the largest UDP datagram (1232 bytes).</li>
 </ul></div>
 <div class="section level3">
 <h3 id="departures-from-the-c-abi-0-0-0-9000">Departures from the C ABI<a class="anchor" aria-label="anchor" href="#departures-from-the-c-abi-0-0-0-9000"></a></h3>

@@ -43,6 +43,36 @@ Initial version, embedding tailcat’s Go library through its C ABI
   inspect addresses and the embedded library.
 - The option `rtailcat.max_operations` (default 1024) caps the number of
   operations in flight, each of which holds an operating system thread.
+- Helpers for building protocols on top of a connection:
+  `$write_message()` and `$read_message()` send and receive
+  length-prefixed messages over TCP (a 4-byte big-endian length, then
+  the bytes), with `max_bytes` checked before a message is read;
+  `$read_exact()` reads exactly `n` bytes; `$read_loop()` and
+  `$stop_reading()` read chunks, datagrams, or messages continuously on
+  the event loop, like `$serve()` does for accepts. Each has an
+  `_async()` twin where it blocks.
+- [`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md),
+  [`tailcat_keys_load()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md),
+  and `tailcat_keygen(path)` keep keys in a JSON file that only the
+  owner can read, and
+  [`tailcat_address_write()`](https://rundel.github.io/rtailcat/reference/tailcat_address_write.md)
+  and
+  [`tailcat_address_read()`](https://rundel.github.io/rtailcat/reference/tailcat_address_write.md)
+  do the same for an address.
+  [`tailcat_reveal()`](https://rundel.github.io/rtailcat/reference/tailcat_reveal.md)
+  returns the plain string of a `tailcat_secret` where an application
+  means to show it.
+- `$close(drain = )` on servers and clients waits for TCP shutdown
+  traffic before closing.
+- [`tailcat_wait()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)
+  and
+  [`tailcat_run()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)
+  run the later event loop from a script, until a promise settles or a
+  condition holds.
+- The options `rtailcat.region` and `rtailcat.derp_map_url` set the
+  relay for servers and clients created without those arguments.
+- [`tailcat_udp_max_payload()`](https://rundel.github.io/rtailcat/reference/tailcat_udp_max_payload.md)
+  gives the largest UDP datagram (1232 bytes).
 
 ### Departures from the C ABI
 

@@ -31,6 +31,12 @@
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul>
+</li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
@@ -52,10 +58,11 @@
 
 <p>rtailcat lets R act as either end of a <a href="https://github.com/tailscale/tailcat" class="external-link">tailcat</a> connection. A tailcat server registers with a public relay and gets a secret, shareable address; any client holding that address can open TCP streams or exchange UDP datagrams with the server, from anywhere, without accounts, port forwarding, or a VPN. Traffic is end-to-end encrypted and uses a direct path between the peers when one can be found.</p>
 <p>The package embeds tailcat’s Go library through its versioned C ABI and wraps it in R6 classes: <code>TailcatServer</code>, <code>TailcatListener</code>, <code>TailcatClient</code>, and <code>TailcatConnection</code>. Every blocking method also has an <code>_async()</code> version that returns a <a href="https://rstudio.github.io/promises/" class="external-link">promises</a> promise, so servers can run alongside Shiny, httpuv, or other code driven by the <a href="https://r-lib.github.io/later/" class="external-link">later</a> event loop.</p>
+<p>Full documentation is at <a href="https://rundel.github.io/rtailcat/" class="uri">https://rundel.github.io/rtailcat/</a>.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>Building the package needs a Go toolchain (version 1.27.2 or newer, see <code>src/go/go.mod</code>), a C compiler, and GNU make. <code>configure</code> looks for Go in the <code>RTAILCAT_GO</code> environment variable, on the <code>PATH</code>, and in a few common install locations, and fails with an explanation if it cannot find a recent enough version. It never downloads Go itself.</p>
+<p>Building the package needs a Go toolchain (version 1.27.2 or newer, see <code>src/go/go.mod</code>), a C compiler, and GNU make; on Windows that means <a href="https://cran.r-project.org/bin/windows/Rtools/" class="external-link">Rtools</a> plus Go on the <code>PATH</code>. <code>configure</code> looks for Go in the <code>RTAILCAT_GO</code> environment variable, on the <code>PATH</code>, and in a few common install locations, and fails with an explanation if it cannot find a recent enough version. It never downloads Go itself.</p>
 <p>The first build downloads the pinned, checksum-verified Go modules unless the source tree contains <code>src/go/vendor/</code> (created by <code>tools/vendor.sh</code>), in which case it builds offline. A tarball built from a vendored tree is meant for offline or self-contained installs, not for CRAN: the vendored Go sources include file paths longer than 100 bytes, so <code>R CMD build</code> warns that such paths are not portable to every tar implementation. The warning is expected and does not affect installing with a current R.</p>
 <p>Install the development version from GitHub with <a href="https://pak.r-lib.org/" class="external-link">pak</a>, which builds the package from source, so Go must be installed as described above:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
@@ -72,8 +79,7 @@
 <span></span>
 <span><span class="va">srv</span> <span class="op">=</span> <span class="va"><a href="reference/TailcatServer.html">TailcatServer</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">lst</span> <span class="op">=</span> <span class="va">srv</span><span class="op">$</span><span class="fu">listen</span><span class="op">(</span><span class="fl">8080</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="va">srv</span><span class="op">$</span><span class="va">address</span>, <span class="st">"address.txt"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">Sys.chmod</a></span><span class="op">(</span><span class="st">"address.txt"</span>, <span class="st">"600"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/tailcat_address_write.html">tailcat_address_write</a></span><span class="op">(</span><span class="va">srv</span>, <span class="st">"address.txt"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">conn</span> <span class="op">=</span> <span class="va">lst</span><span class="op">$</span><span class="fu">accept</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">msg</span> <span class="op">=</span> <span class="va">conn</span><span class="op">$</span><span class="fu">read_all</span><span class="op">(</span>as <span class="op">=</span> <span class="st">"text"</span><span class="op">)</span></span>
@@ -81,13 +87,12 @@
 <span><span class="va">conn</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">srv</span><span class="op">$</span><span class="fu">drain</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">srv</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">srv</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
 <p>Run the client in a second R session, on the same machine or anywhere else:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rundel.github.io/rtailcat/">rtailcat</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">cl</span> <span class="op">=</span> <span class="va"><a href="reference/TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/readLines.html" class="external-link">readLines</a></span><span class="op">(</span><span class="st">"address.txt"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">cl</span> <span class="op">=</span> <span class="va"><a href="reference/TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="fu"><a href="reference/tailcat_address_write.html">tailcat_address_read</a></span><span class="op">(</span><span class="st">"address.txt"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">conn</span> <span class="op">=</span> <span class="va">cl</span><span class="op">$</span><span class="fu">dial</span><span class="op">(</span><span class="fl">8080</span><span class="op">)</span></span>
 <span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="st">"hello from the client"</span><span class="op">)</span></span>
 <span><span class="va">conn</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span>
@@ -95,13 +100,13 @@
 <span><span class="co">#&gt; [1] "server received: hello from the client"</span></span>
 <span><span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">cl</span><span class="op">$</span><span class="fu">drain</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">cl</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">cl</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
 <p>Reads return raw vectors by default; <code>as = "text"</code> returns a UTF-8 string instead. Over TCP a single <code>$read()</code> can end in the middle of a multibyte character, so use <code>$read_all(as = "text")</code>, or read raw bytes and convert them once, for multibyte text. Data containing NUL bytes cannot be read as text and raises an error.</p>
 <p><code>$read_all()</code> keeps the whole stream in memory, so give it a limit when the peer is not trusted: <code>conn$read_all(max_bytes = 1e6)</code> raises a <code>tailcat_failure</code> error as soon as the stream turns out to be longer than a million bytes. The bytes read are discarded, but the connection stays open.</p>
-<p><code>$close_write()</code> tells the other side that you have finished sending (it then reads end of stream, so <code>$read_all()</code> returns), while still letting you read the reply. <code>$drain()</code> waits briefly for TCP shutdown traffic to finish so the peer sees a clean close; call it before closing a client or server or quitting R.</p>
-<p>Use <code>network = "udp"</code> in <code>$listen()</code> and <code>$dial()</code> for datagrams: each <code>$write()</code> sends one datagram of at most 1232 bytes and each <code>$read()</code> returns one. A UDP flow appears at the listener once the client has sent its first datagram.</p>
-<p>A few helpers round this out: <code>cl$ping()</code> and <code>cl$disco_ping()</code> measure latency to the server in seconds (the latter also reports whether the path is direct or through a relay), <code><a href="reference/tailcat_address_parse.html">tailcat_address_parse()</a></code> shows the public parts of an address without revealing its pre-shared key, and <code><a href="reference/tailcat_build_info.html">tailcat_build_info()</a></code> reports the embedded tailcat and Go versions.</p>
+<p>For a conversation with several messages in each direction, use <code>$write_message()</code> and <code>$read_message()</code>: each <code>$read_message()</code> returns exactly what one <code>$write_message()</code> sent, however TCP split it up on the way, and returns <code>NULL</code> once the other side has ended the stream. Give <code>$read_message()</code> a <code>max_bytes</code> when the peer is not trusted; a longer message is refused before it is read. <code>$read_exact(n)</code> reads exactly <code>n</code> bytes, for fixed-size fields of other binary protocols.</p>
+<p><code>$close_write()</code> tells the other side that you have finished sending (it then reads end of stream, so <code>$read_all()</code> returns), while still letting you read the reply. <code>$close(drain = 5)</code> on a client or server first waits up to five seconds for TCP shutdown traffic to finish, so the peer sees a clean close; close the connections before that.</p>
+<p>Use <code>network = "udp"</code> in <code>$listen()</code> and <code>$dial()</code> for datagrams: each <code>$write()</code> sends one datagram of at most 1232 bytes (<code><a href="reference/tailcat_udp_max_payload.html">tailcat_udp_max_payload()</a></code>) and each <code>$read()</code> returns one. A UDP flow appears at the listener once the client has sent its first datagram.</p>
+<p>A few helpers round this out: <code>cl$ping()</code> and <code>cl$disco_ping()</code> measure latency to the server in seconds (the latter also reports whether the path is direct or through a relay), <code><a href="reference/tailcat_address_parse.html">tailcat_address_parse()</a></code> shows the public parts of an address without revealing its pre-shared key, and <code><a href="reference/tailcat_build_info.html">tailcat_build_info()</a></code> reports the embedded tailcat and Go versions. To use your own relay for every server and client in a session, including ones created inside other packages, set the options <code>rtailcat.region</code> or <code>rtailcat.derp_map_url</code> (see <code><a href="reference/TailcatServer.html">?TailcatServer</a></code>).</p>
 </div>
 <div class="section level2">
 <h2 id="serving-connections-asynchronously">Serving connections asynchronously<a class="anchor" aria-label="anchor" href="#serving-connections-asynchronously"></a>
@@ -119,12 +124,13 @@
 <span>    <span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="op">}</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="va">srv</span><span class="op">$</span><span class="va">address</span>, <span class="st">"address.txt"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">Sys.chmod</a></span><span class="op">(</span><span class="st">"address.txt"</span>, <span class="st">"600"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="reference/tailcat_address_write.html">tailcat_address_write</a></span><span class="op">(</span><span class="va">srv</span>, <span class="st">"address.txt"</span><span class="op">)</span></span></code></pre></div>
 <p>The loop only makes progress while the event loop runs, which happens automatically when the R console is idle and inside Shiny or httpuv apps. In a script run with <code>Rscript</code>, keep it running explicitly:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">while</span> <span class="op">(</span><span class="op">!</span><span class="va">lst</span><span class="op">$</span><span class="va">is_closed</span><span class="op">)</span> <span class="fu">later</span><span class="fu">::</span><span class="fu"><a href="https://later.r-lib.org/reference/run_now.html" class="external-link">run_now</a></span><span class="op">(</span><span class="cn">Inf</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/tailcat_wait.html">tailcat_run</a></span><span class="op">(</span>until <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="va">lst</span><span class="op">$</span><span class="va">is_closed</span><span class="op">)</span></span></code></pre></div>
 <p>A handler error, or a rejection of the promise the handler returns (as in the example above), is passed to <code>on_error</code> if you give one (<code>lst$serve(handler, on_error = function(cond, conn) ...)</code>), otherwise it becomes a warning; either way that connection is closed and the loop carries on. Closing the listener or the server ends the loop; <code>lst$stop_serving()</code> ends it but keeps the listener open. Blocking calls inside a handler hold up the event loop until they return, so prefer the <code>_async()</code> methods there.</p>
+<p><code>conn$read_loop(callback)</code> is the reading counterpart of <code>$serve()</code>: it calls <code>callback</code> with each chunk, UDP datagram, or (with <code>messages = TRUE</code>) message as it arrives, waits for a promise the callback returns before reading on, and stops at the end of the stream (calling <code>on_end</code>), on <code>conn$stop_reading()</code>, or on an error (calling <code>on_error</code> and closing the connection).</p>
+<p>In a script, <code>tailcat_wait(promise, timeout)</code> runs the event loop until a promise settles and returns its value, so <code>conn = tailcat_wait(cl$dial_async(8080))</code> works like the blocking call.</p>
 <p>The other asynchronous methods work the same way, for example <code>cl$dial_async(8080)</code> or <code>srv$listen_async(0)</code>. Promises reject with the same error conditions the blocking methods raise. Reads, and writes, on one connection run in the order they are started, so several <code>$write_async()</code> calls send their data in call order, while a read and a write can run at the same time. A promise is settled on the later event loop that was current when the operation started, for example inside <code><a href="https://later.r-lib.org/reference/create_loop.html" class="external-link">later::with_temp_loop()</a></code>; if that loop is destroyed first, the result is delivered on the global loop instead.</p>
 <p>Any promise returned by an <code>_async()</code> method or function can be canceled with <code><a href="reference/tailcat_cancel.html">tailcat_cancel()</a></code>. The promise then rejects with a <code>tailcat_canceled</code> condition, and the listener, connection, client, or server stays usable, as after a timeout:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
@@ -198,8 +204,8 @@
 <div class="section level2">
 <h2 id="security">Security<a class="anchor" aria-label="anchor" href="#security"></a>
 </h2>
-<p>A tailcat address is a credential. It contains the server’s public key, relay details, and a pre-shared key, and anyone who has it can connect to every port the server listens on. Share it privately and do not commit it, log it, or paste it into chats or issues. Addresses, private keys, and pre-shared keys are returned as <code>tailcat_secret</code> strings: <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>, <code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code>, and <code><a href="https://rdrr.io/r/utils/str.html" class="external-link">str()</a></code> show <code>&lt;redacted&gt;</code>, as do <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> and <code><a href="https://rdrr.io/r/utils/str.html" class="external-link">str()</a></code> of lists that contain them (<code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code> of a plain list only redacts from R 4.6.0; the lists this package returns redact in every version), while <code><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines()</a></code>, <code><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste()</a></code>, <code><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character()</a></code>, and the functions of this package use the full value. <code><a href="https://rdrr.io/r/base/dput.html" class="external-link">dput()</a></code>, <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code>, and explicit conversions reveal the value, so store secrets deliberately. Servers fetch their address from tailcat when asked instead of keeping it in R, so saving a server object does not write its address to disk.</p>
-<p>By default each server gets a new key pair and address. To keep an address across restarts, create the keys once with <code><a href="reference/tailcat_keygen.html">tailcat_keygen()</a></code>, store them securely, and pass them back with <code>TailcatServer$new(key = keys)</code>, which uses both the private key and the pre-shared key. To accept only particular clients, give them stable keys (<code>TailcatClient$new(address, key = keys)</code>) and list their public keys in <code>allowed_clients</code> or add them with <code>$allow_client()</code>.</p>
+<p>A tailcat address is a credential. It contains the server’s public key, relay details, and a pre-shared key, and anyone who has it can connect to every port the server listens on. Share it privately and do not commit it, log it, or paste it into chats or issues. Addresses, private keys, and pre-shared keys are returned as <code>tailcat_secret</code> strings: <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code>, <code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code>, and <code><a href="https://rdrr.io/r/utils/str.html" class="external-link">str()</a></code> show <code>&lt;redacted&gt;</code>, as do <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> and <code><a href="https://rdrr.io/r/utils/str.html" class="external-link">str()</a></code> of lists that contain them (<code><a href="https://rdrr.io/r/base/format.html" class="external-link">format()</a></code> of a plain list only redacts from R 4.6.0; the lists this package returns redact in every version), while <code><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines()</a></code>, <code><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste()</a></code>, <code><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character()</a></code>, and the functions of this package use the full value. <code><a href="https://rdrr.io/r/base/dput.html" class="external-link">dput()</a></code>, <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code>, and explicit conversions reveal the value, so store secrets deliberately: <code><a href="reference/tailcat_reveal.html">tailcat_reveal()</a></code> returns the plain string where you mean to show an address, and <code><a href="reference/tailcat_address_write.html">tailcat_address_write()</a></code> and <code><a href="reference/tailcat_keys_save.html">tailcat_keys_save()</a></code> write files that only you can read. Servers fetch their address from tailcat when asked instead of keeping it in R, so saving a server object does not write its address to disk.</p>
+<p>By default each server gets a new key pair and address. To keep an address across restarts, create the keys with <code>keys = tailcat_keygen("~/.config/myapp/keys.json")</code>, which saves them to a file only you can read the first time and loads them from it afterwards, and pass them to <code>TailcatServer$new(key = keys)</code>, which uses both the private key and the pre-shared key. To accept only particular clients, give them stable keys (<code>TailcatClient$new(address, key = keys)</code>) and list their public keys in <code>allowed_clients</code> or add them with <code>$allow_client()</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="caveats">Caveats<a class="anchor" aria-label="anchor" href="#caveats"></a>
@@ -216,35 +222,47 @@
 <div class="section level2">
 <h2 id="platform-status">Platform status<a class="anchor" aria-label="anchor" href="#platform-status"></a>
 </h2>
+<p><code>R CMD check</code>, including the end-to-end tests against a local relay, runs on GitHub Actions for every push:</p>
 <table class="table">
+<colgroup>
+<col width="23%">
+<col width="25%">
+<col width="50%">
+</colgroup>
 <thead><tr>
 <th>Platform</th>
+<th>R versions</th>
 <th>Status</th>
 </tr></thead>
 <tbody>
 <tr>
 <td>macOS (arm64)</td>
-<td>Tested</td>
+<td>release</td>
+<td>Tested in CI and in development</td>
+</tr>
+<tr>
+<td>Linux (Ubuntu, x86_64)</td>
+<td>devel, release, oldrel-1</td>
+<td>Tested in CI</td>
+</tr>
+<tr>
+<td>Windows (x86_64, Rtools)</td>
+<td>release</td>
+<td>Tested in CI, except the interrupt and fork tests</td>
 </tr>
 <tr>
 <td>macOS (x86_64)</td>
+<td></td>
 <td>Expected to work, untested</td>
-</tr>
-<tr>
-<td>Linux</td>
-<td>Expected to work, untested</td>
-</tr>
-<tr>
-<td>Windows (Rtools)</td>
-<td>Build files provided, untested</td>
 </tr>
 </tbody>
 </table>
+<p><code>R CMD check</code> reports one expected message about compiled code on every platform (a WARNING on macOS and Linux, a NOTE on Windows): the Go runtime in the package’s shared library refers to <code>stderr</code>, <code>abort</code>, and <code>exit</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="development">Development<a class="anchor" aria-label="anchor" href="#development"></a>
 </h2>
-<p><code>devtools::test()</code> runs the end-to-end tests against a local relay on 127.0.0.1, so they need Go but no internet access: a setup file builds upstream’s <code>internal/capitest</code> relay from the small Go module in <code>tests/relay/</code> (pinned to the same tailcat commit as the package) into a temporary directory and stops it when the run ends. If the relay cannot be built or started, the tests fall back to tailcat’s public relays and say so. Set <code>RTAILCAT_TEST_RELAY</code> to <code>local</code> (fail instead of falling back), <code>public</code>, or <code>auto</code> (the default), or <code>RTAILCAT_SKIP_ONLINE=1</code> to skip the network tests. On CRAN, and under <code>R CMD check</code> unless <code>NOT_CRAN=true</code>, nothing is built and the network tests are skipped.</p>
+<p><code>devtools::test()</code> runs the end-to-end tests against a local relay on 127.0.0.1, so they need Go but no internet access: a setup file builds upstream’s <code>internal/capitest</code> relay from the small Go module in <code>tests/relay/</code> (pinned to the same tailcat commit as the package) into a temporary directory and stops it when the run ends. If the relay cannot be built or started, the tests fall back to tailcat’s public relays and say so. Set <code>RTAILCAT_TEST_RELAY</code> to <code>local</code> (fail instead of falling back), <code>public</code>, or <code>auto</code> (the default), or <code>RTAILCAT_SKIP_ONLINE=1</code> to skip the network tests. On CRAN, and under <code>R CMD check</code> unless <code>NOT_CRAN=true</code>, nothing is built and the network tests are skipped. The GitHub Actions workflow installs Go with <code>actions/setup-go</code> and sets <code>NOT_CRAN</code>, so it runs the full suite with the local relay.</p>
 </div>
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>

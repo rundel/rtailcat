@@ -24,7 +24,10 @@ tailcat_address_resolve_async(address, derp_map_url = NULL, timeout = 30)
 
 - derp_map_url:
 
-  URL of a relay map to use instead of the default, or `NULL`.
+  URL of a relay map to use instead of the default, or `NULL` to use the
+  `rtailcat.derp_map_url` option (see the section on relay options in
+  [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md))
+  or, when that is unset, the default.
 
 - timeout:
 

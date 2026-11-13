@@ -100,7 +100,10 @@ Create a client. No network access happens until it is used.
 
 - `derp_map_url`:
 
-  URL of a relay map to use instead of the default.
+  URL of a relay map to use instead of the default, or `NULL` to use the
+  `rtailcat.derp_map_url` option (see the section on relay options in
+  [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md))
+  or, when that is unset, the default.
 
 ------------------------------------------------------------------------
 
@@ -339,12 +342,21 @@ A promise resolving with the client.
 
 Close the client and all of its connections. Closing twice is harmless.
 Closing tears the client down immediately, so the server may not see the
-end of its streams until its own reads time out; to give the server a
-clean end of stream, close the connections and call `$drain()` first.
+end of its streams until its own reads time out. To give the server a
+clean end of stream, close the connections first and pass `drain`, which
+waits for their shutdown traffic before closing (see `$drain()`).
 
 #### Usage
 
-    TailcatClient$close()
+    TailcatClient$close(drain = 0)
+
+#### Arguments
+
+- `drain`:
+
+  Seconds to wait for TCP shutdown traffic before closing, as for
+  `$drain()`; `0` (the default) closes at once. A drain that times out
+  or fails does not prevent the close and is not reported.
 
 #### Returns
 

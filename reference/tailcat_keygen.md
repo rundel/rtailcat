@@ -11,8 +11,19 @@ to give a client a stable public key (useful with `allowed_clients`).
 ## Usage
 
 ``` r
-tailcat_keygen()
+tailcat_keygen(path = NULL)
 ```
+
+## Arguments
+
+- path:
+
+  `NULL` (the default) to return new keys without saving them, or the
+  path of a keys file: if it exists, the keys are loaded from it with
+  [`tailcat_keys_load()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md);
+  otherwise new keys are generated and saved there with
+  [`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md).
+  This gives a script the same keys every time it runs.
 
 ## Value
 
@@ -34,9 +45,9 @@ hold the full values
 ([`as.character()`](https://rdrr.io/r/base/character.html) or
 [`unclass()`](https://rdrr.io/r/base/class.html) returns them, and
 [`dput()`](https://rdrr.io/r/base/dput.html) shows them), so store them
-securely, for example with
-[`saveRDS()`](https://rdrr.io/r/base/readRDS.html) to a file only you
-can read.
+securely:
+[`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md)
+writes them to a file only you can read.
 
 ## Examples
 
@@ -44,9 +55,9 @@ can read.
 keys = tailcat_keygen()
 keys
 #> <tailcat_keys>
-#>   public_key:    nodekey:aba063e98cb9fc736cdf88ef4bd6d86c4b7d5d54f4c944f876997d311e8d1019
+#>   public_key:    nodekey:6a5b0638cdac2767c257aa7703a35a5cabf37c3827fb5e392fbd7cc31087cd2f
 #>   private_key:   <redacted>
 #>   preshared_key: <redacted>
 keys$public_key
-#> [1] "nodekey:aba063e98cb9fc736cdf88ef4bd6d86c4b7d5d54f4c944f876997d311e8d1019"
+#> [1] "nodekey:6a5b0638cdac2767c257aa7703a35a5cabf37c3827fb5e392fbd7cc31087cd2f"
 ```

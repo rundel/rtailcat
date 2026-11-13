@@ -16,6 +16,10 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -87,9 +91,9 @@
         </dt>
         <dd>Tailcat connection</dd>
       </dl></div><div class="section level2">
-      <h2 id="cancellation">Cancellation<a class="anchor" aria-label="anchor" href="#cancellation"></a></h2>
+      <h2 id="asynchronous-operations">Asynchronous operations<a class="anchor" aria-label="anchor" href="#asynchronous-operations"></a></h2>
 
-      <div class="section-desc"><p>Cancel a pending asynchronous operation.</p></div>
+      <div class="section-desc"><p>Cancel a pending operation, or run the event loop from a script.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -102,6 +106,13 @@
 
         </dt>
         <dd>Cancel a pending asynchronous operation</dd>
+
+        <dt>
+
+          <code><a href="tailcat_wait.html">tailcat_wait()</a></code> <code><a href="tailcat_wait.html">tailcat_run()</a></code>
+
+        </dt>
+        <dd>Run the event loop from a script</dd>
       </dl></div><div class="section level2">
       <h2 id="keys-and-addresses">Keys and addresses<a class="anchor" aria-label="anchor" href="#keys-and-addresses"></a></h2>
 
@@ -121,6 +132,13 @@
 
         <dt>
 
+          <code><a href="tailcat_keys_save.html">tailcat_keys_save()</a></code> <code><a href="tailcat_keys_save.html">tailcat_keys_load()</a></code>
+
+        </dt>
+        <dd>Save and load tailcat keys</dd>
+
+        <dt>
+
           <code><a href="tailcat_address_parse.html">tailcat_address_parse()</a></code>
 
         </dt>
@@ -132,6 +150,13 @@
 
         </dt>
         <dd>Embed relay details in a tailcat address</dd>
+
+        <dt>
+
+          <code><a href="tailcat_address_write.html">tailcat_address_write()</a></code> <code><a href="tailcat_address_write.html">tailcat_address_read()</a></code>
+
+        </dt>
+        <dd>Pass a tailcat address through a file</dd>
       </dl></div><div class="section level2">
       <h2 id="secrets">Secrets<a class="anchor" aria-label="anchor" href="#secrets"></a></h2>
 
@@ -148,8 +173,15 @@
 
         </dt>
         <dd>Secret strings</dd>
+
+        <dt>
+
+          <code><a href="tailcat_reveal.html">tailcat_reveal()</a></code>
+
+        </dt>
+        <dd>Reveal a secret</dd>
       </dl></div><div class="section level2">
-      <h2 id="build-information">Build information<a class="anchor" aria-label="anchor" href="#build-information"></a></h2>
+      <h2 id="limits-and-build-information">Limits and build information<a class="anchor" aria-label="anchor" href="#limits-and-build-information"></a></h2>
 
 
 
@@ -159,6 +191,13 @@
 
 
       <dl><dt>
+
+          <code><a href="tailcat_udp_max_payload.html">tailcat_udp_max_payload()</a></code>
+
+        </dt>
+        <dd>Largest UDP datagram</dd>
+
+        <dt>
 
           <code><a href="tailcat_build_info.html">tailcat_build_info()</a></code>
 

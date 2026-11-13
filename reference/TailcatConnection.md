@@ -10,7 +10,11 @@ Connections are created by `TailcatClient$dial()` and
 For TCP, reads may return fewer bytes than requested and `$read()`
 returns `NULL` at end of stream. For UDP, each read returns one datagram
 (possibly `raw(0)`) and each write sends one datagram of at most 1232
-bytes.
+bytes
+([`tailcat_udp_max_payload()`](https://rundel.github.io/rtailcat/reference/tailcat_udp_max_payload.md)).
+`$write_message()` and `$read_message()` send and receive delimited
+messages over TCP (see the section on messages), and `$read_loop()`
+reads continuously from the event loop (see the section on read loops).
 
 One read and one write may be in flight at the same time (for example a
 pending `$read_async()` while writing). Further operations in the same
@@ -38,6 +42,50 @@ prints a stack trace to standard error, on a TCP connection whose two
 directions have both been shut down (both sides called
 `$close_write()`). `$print()` and `$format()` avoid this by leaving the
 endpoints out once `$close_write()` has succeeded on the connection.
+
+## Messages
+
+TCP is a stream of bytes with no boundaries: one `$write()` may arrive
+as several reads, and several writes as one. `$write_message()` and
+`$read_message()` add boundaries, so that each `$read_message()` returns
+exactly what one `$write_message()` sent. On the wire a message is its
+length as 4 bytes (unsigned, big-endian, so a peer in another language
+can implement it in a few lines) followed by that many bytes. The
+protocol allows messages up to 4 GiB; rtailcat sends and accepts at most
+2147483647 bytes (just under 2 GiB) per message.
+
+Give `$read_message()` a `max_bytes` that fits your protocol whenever
+the peer is not fully trusted: the length is checked before the message
+is read, so an oversized message is refused without reading it into
+memory.
+
+To send R objects, serialize them:
+`conn$write_message(serialize(x, NULL))` and
+`unserialize(conn$read_message(max_bytes = 1e8))`. Only do this with
+peers you trust completely:
+[`unserialize()`](https://rdrr.io/r/base/serialize.html) on data from an
+untrusted peer can run arbitrary code. Use a data format such as JSON
+otherwise.
+
+## Read loops
+
+`$read_loop(callback)` reads continuously, driven by the later event
+loop, and calls `callback(data)` on the main R thread with each chunk
+(TCP), each datagram (UDP), or with `messages = TRUE` each message. It
+is the reading counterpart of `TailcatListener$serve()` and makes
+progress under the same conditions: while R is idle at the console,
+inside Shiny or httpuv, or while a script runs the event loop (see
+[`tailcat_run()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)).
+If `callback` returns a promise, the next read starts after it settles,
+so data is handled in order and a slow callback slows down reading
+rather than piling up work.
+
+The loop ends when the peer ends a TCP stream (`on_end` is then called),
+when the connection or its owner is closed, or when `$stop_reading()` is
+called; the last two end it quietly. If a read fails or the callback
+fails, `on_error` is called, the loop stops, and the connection is
+closed. While a read loop runs, other reads on the connection would
+interleave with it, so only write.
 
 ## Active bindings
 
@@ -87,6 +135,22 @@ endpoints out once `$close_write()` has succeeded on the connection.
 - [`TailcatConnection$read_all()`](#method-TailcatConnection-read_all)
 
 - [`TailcatConnection$read_all_async()`](#method-TailcatConnection-read_all_async)
+
+- [`TailcatConnection$read_exact()`](#method-TailcatConnection-read_exact)
+
+- [`TailcatConnection$read_exact_async()`](#method-TailcatConnection-read_exact_async)
+
+- [`TailcatConnection$write_message()`](#method-TailcatConnection-write_message)
+
+- [`TailcatConnection$write_message_async()`](#method-TailcatConnection-write_message_async)
+
+- [`TailcatConnection$read_message()`](#method-TailcatConnection-read_message)
+
+- [`TailcatConnection$read_message_async()`](#method-TailcatConnection-read_message_async)
+
+- [`TailcatConnection$read_loop()`](#method-TailcatConnection-read_loop)
+
+- [`TailcatConnection$stop_reading()`](#method-TailcatConnection-stop_reading)
 
 - [`TailcatConnection$write()`](#method-TailcatConnection-write)
 
@@ -283,6 +347,291 @@ ends the read in flight and starts no further reads.
 #### Returns
 
 A promise resolving with a raw vector or a string.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$read_exact()`
+
+Read exactly `n` bytes (TCP only), waiting for as many reads as that
+takes. Use it to read fixed-size fields of a binary protocol; for
+messages of varying length see `$read_message()`.
+
+If the stream ends before the first byte, `$read_exact()` returns
+`NULL`, so a peer that closes the connection between records is not an
+error. If it ends part way, or on timeout or error, the condition's
+`bytes` field gives the number of bytes read before it; those bytes are
+discarded. The timeout covers all the reads together. With `timeout = 0`
+it returns only if all `n` bytes have already arrived.
+
+#### Usage
+
+    TailcatConnection$read_exact(n, timeout = Inf, as = c("raw", "text"))
+
+#### Arguments
+
+- `n`:
+
+  The number of bytes to read, a single non-negative whole number.
+  `n = 0` returns `raw(0)` (or `""`) without reading.
+
+- `timeout`:
+
+  Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+
+- `as`:
+
+  `"raw"` or `"text"`, as for `$read()`.
+
+#### Returns
+
+A raw vector or a string of `n` bytes, or `NULL` if the stream ended
+before the first byte.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$read_exact_async()`
+
+Asynchronous version of `$read_exact()`. Canceling the promise with
+[`tailcat_cancel()`](https://rundel.github.io/rtailcat/reference/tailcat_cancel.md)
+ends the read in flight and starts no further reads.
+
+#### Usage
+
+    TailcatConnection$read_exact_async(n, timeout = Inf, as = c("raw", "text"))
+
+#### Arguments
+
+- `n`:
+
+  The number of bytes to read.
+
+- `timeout`:
+
+  Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+
+- `as`:
+
+  `"raw"` or `"text"`, as for `$read()`.
+
+#### Returns
+
+A promise resolving with a raw vector or a string, or `NULL` if the
+stream ended before the first byte.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$write_message()`
+
+Send `data` as one message (TCP only), for the peer to read with
+`$read_message()`. See the section on messages.
+
+#### Usage
+
+    TailcatConnection$write_message(data, timeout = Inf)
+
+#### Arguments
+
+- `data`:
+
+  A raw vector, or a character vector which is pasted together without
+  separators and sent as UTF-8. At most 2147483647 bytes.
+
+- `timeout`:
+
+  Seconds to wait; `Inf` waits indefinitely and `0` polls. On timeout or
+  error the condition's `bytes` field gives the number of bytes already
+  sent, counting the 4-byte length; the peer then sees a partial
+  message, so close the connection.
+
+#### Returns
+
+The number of bytes in the message, not counting its length prefix,
+invisibly.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$write_message_async()`
+
+Asynchronous version of `$write_message()`.
+
+#### Usage
+
+    TailcatConnection$write_message_async(data, timeout = Inf)
+
+#### Arguments
+
+- `data`:
+
+  A raw or character vector.
+
+- `timeout`:
+
+  Seconds to wait; `Inf` waits indefinitely and `0` polls.
+
+#### Returns
+
+A promise resolving with the number of bytes in the message.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$read_message()`
+
+Read one message sent with `$write_message()` (TCP only). See the
+section on messages.
+
+If the stream ends cleanly between messages, `$read_message()` returns
+`NULL`. If it ends part way through a message, or on timeout or error,
+the condition's `bytes` field gives the number of bytes read, counting
+the 4-byte length; those bytes are discarded and the connection should
+be closed, since the rest of the stream no longer starts at a message
+boundary. The timeout covers the whole message.
+
+#### Usage
+
+    TailcatConnection$read_message(
+      timeout = Inf,
+      as = c("raw", "text"),
+      max_bytes = Inf
+    )
+
+#### Arguments
+
+- `timeout`:
+
+  Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+
+- `as`:
+
+  `"raw"` or `"text"`, as for `$read()`.
+
+- `max_bytes`:
+
+  The largest message to accept, a single non-negative whole number or
+  `Inf` (the default; messages are limited to 2147483647 bytes in any
+  case). The length is checked before the message is read: a longer
+  message raises a `tailcat_failure` error with `bytes` set to 4, and
+  its body is left unread, so close the connection.
+
+#### Returns
+
+A raw vector or a string, or `NULL` if the stream ended before the next
+message.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$read_message_async()`
+
+Asynchronous version of `$read_message()`. Canceling the promise with
+[`tailcat_cancel()`](https://rundel.github.io/rtailcat/reference/tailcat_cancel.md)
+ends the read in flight and starts no further reads; a message read part
+way is lost.
+
+#### Usage
+
+    TailcatConnection$read_message_async(
+      timeout = Inf,
+      as = c("raw", "text"),
+      max_bytes = Inf
+    )
+
+#### Arguments
+
+- `timeout`:
+
+  Overall seconds to wait; `Inf` waits indefinitely and `0` polls.
+
+- `as`:
+
+  `"raw"` or `"text"`, as for `$read()`.
+
+- `max_bytes`:
+
+  The largest message to accept, as for `$read_message()`.
+
+#### Returns
+
+A promise resolving with a raw vector or a string, or `NULL` if the
+stream ended before the next message.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$read_loop()`
+
+Start an asynchronous read loop that calls `callback(data)` with every
+chunk (TCP), datagram (UDP), or message (with `messages = TRUE`) as it
+arrives, and returns immediately. See the section on read loops.
+
+#### Usage
+
+    TailcatConnection$read_loop(
+      callback,
+      on_error = NULL,
+      on_end = NULL,
+      as = c("raw", "text"),
+      messages = FALSE,
+      max_bytes = Inf
+    )
+
+#### Arguments
+
+- `callback`:
+
+  A function of one argument, the data read. It may return a promise, in
+  which case the next read starts once the promise settles.
+
+- `on_error`:
+
+  A function `function(cond)` called when a read fails, the data is not
+  acceptable (such as a message longer than `max_bytes`), `callback`
+  signals an error, or the promise it returned rejects; or `NULL` to
+  turn such errors into warnings (signaled from the later event loop).
+  The loop then stops and the connection is closed. An error signaled by
+  `on_error` itself is turned into a warning.
+
+- `on_end`:
+
+  A function of no arguments called when the peer ends a TCP stream,
+  after the last data, or `NULL`. An error it signals is turned into a
+  warning.
+
+- `as`:
+
+  `"raw"` or `"text"`, as for `$read()`.
+
+- `messages`:
+
+  `FALSE` (the default) to deliver data as it arrives, or `TRUE` to
+  deliver whole messages sent with `$write_message()` (TCP only).
+
+- `max_bytes`:
+
+  The largest message to accept with `messages = TRUE`, as for
+  `$read_message()`.
+
+#### Returns
+
+The connection, invisibly. Calling it on a connection that is already in
+a read loop raises a `tailcat_failure` error (call `$stop_reading()`
+first), and on a closed connection a `tailcat_closed` error.
+
+------------------------------------------------------------------------
+
+### `TailcatConnection$stop_reading()`
+
+Stop the read loop started by `$read_loop()` without closing the
+connection. The pending read is canceled; data whose read completed at
+the same moment is still passed to the callback, but a message read part
+way is lost, so with `messages = TRUE` stop only between messages or
+then close the connection. Calling it when no read loop is running does
+nothing.
+
+#### Usage
+
+    TailcatConnection$stop_reading()
+
+#### Returns
+
+The connection, invisibly.
 
 ------------------------------------------------------------------------
 

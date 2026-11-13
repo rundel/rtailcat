@@ -16,6 +16,10 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/building-on-rtailcat.html">Building on rtailcat</a></li>
+  </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -53,7 +57,7 @@
 
 
 <dt id="arg-derp-map-url">derp_map_url<a class="anchor" aria-label="anchor" href="#arg-derp-map-url"></a></dt>
-<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code>.</p></dd>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
 
 
 <dt id="arg-timeout">timeout<a class="anchor" aria-label="anchor" href="#arg-timeout"></a></dt>

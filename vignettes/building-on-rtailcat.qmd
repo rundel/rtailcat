@@ -13,13 +13,13 @@ knitr:
 
 ```{=html}
 <style>
-pre.sender, pre.receiver, pre.host, pre.client, pre.laptop, pre.job {
+pre.sender, pre.receiver, pre.laptop, pre.job, pre.app, pre.browser {
   border-left: 4px solid var(--side-color);
   padding-top: 1.8em;
   position: relative;
 }
-pre.sender::before, pre.receiver::before, pre.host::before,
-pre.client::before, pre.laptop::before, pre.job::before {
+pre.sender::before, pre.receiver::before, pre.laptop::before,
+pre.job::before, pre.app::before, pre.browser::before {
   content: var(--side-label);
   position: absolute;
   top: 0.4em;
@@ -31,29 +31,29 @@ pre.client::before, pre.laptop::before, pre.job::before {
 }
 pre.sender { --side-color: #1f77b4; --side-label: "On the sending machine"; }
 pre.receiver { --side-color: #d95f02; --side-label: "On the receiving machine"; }
-pre.host { --side-color: #1f77b4; --side-label: "On the host"; }
-pre.client { --side-color: #d95f02; --side-label: "On the client"; }
 pre.laptop { --side-color: #1f77b4; --side-label: "On your laptop"; }
 pre.job { --side-color: #d95f02; --side-label: "In the job"; }
+pre.app { --side-color: #1f77b4; --side-label: "On the machine with the app"; }
+pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 </style>
 ```
 
 rtailcat gives you TCP streams and UDP datagrams between two R processes that can be anywhere, without accounts, port forwarding, or a VPN. That is a low-level building block, so this vignette shows three small things you might build with it, each written as if it were a little package of its own:
 
-1. wormhole: send an R object or a file to someone else.
-2. remote: run R code on a machine behind a firewall, such as a lab workstation.
-3. progress: watch a long-running job report its progress, live, over UDP.
+1. wormhole: send an R object to someone else.
+2. progress: watch a long-running job report its progress, live, over UDP.
+3. proxy: open a web app running on another machine in your browser.
 
 Each section first defines the functions and then shows them in use. The usage code always runs in two R sessions, usually on two different machines, and each code block is labeled with the machine it runs on. The code is complete and runnable; the functions are also installed with the package, one file per example, so you can load all of them or just the one you want:
 
 ```{r}
 #| label: intro-load
 source(system.file("examples/wormhole.R", package = "rtailcat"))
-source(system.file("examples/remote.R", package = "rtailcat"))
 source(system.file("examples/progress.R", package = "rtailcat"))
+source(system.file("examples/proxy.R", package = "rtailcat"))
 ```
 
-A tailcat address is a secret: anyone who has it can connect to the server. The output below shortens addresses to forms such as `tcAbC...xYz`, and where code needs an address you paste in the full one that the other side printed. Public keys (`nodekey:...`) are not secret, but they are shortened the same way.
+A tailcat address is a secret: anyone who has it can connect to the server. The output below shortens addresses to forms such as `tcAbC...xYz`, and where code needs an address you paste in the full one that the other side printed.
 
 The output shown was recorded by running the code against a local test relay. It is not computed when the vignette is built, because that needs two R sessions and a network connection.
 
@@ -65,26 +65,26 @@ A TCP connection is a stream of bytes, not of messages. `$read()` returns whatev
 
 The examples below use messages for everything that goes over TCP. To send an R object, send `serialize(x, NULL)` as a message and call `unserialize()` on the other side.
 
-## wormhole: sending an object or a file
+## wormhole: sending an R object
 
 Sharing a data set with a collaborator usually means email attachments, a shared drive, or uploading it somewhere. With wormhole the sender runs `wormhole_send()`, which prints an address and waits; the receiver runs `wormhole_receive()` with that address and gets the object. Neither side needs a public IP address or an open port, and the data is encrypted end to end.
 
-The sender starts a server, listens on a fixed port, and waits for one connection. It sends a small JSON header describing the payload, then the payload, and waits for the receiver to confirm before it shuts down. Once the receiver has connected, the listener is closed, so nobody else can connect with the same address.
+The sender starts a server, listens on a fixed port, and waits for one connection. It sends the serialized object as a single message and waits for the receiver to confirm before it shuts down. Once the receiver has connected, the listener is closed, so nobody else can connect with the same address.
 
 ```{r}
 #| label: wormhole-def-send
 wormhole_port = 4404L
 
+format_bytes = function(n) {
+  # Formats a byte count for messages, such as "3.8 kB"
+
+  structure(n, class = "object_size") |>
+    format(units = "auto", standard = "SI")
+}
+
 wormhole_send = function(x, timeout = 600) {
-  wormhole_offer(list(kind = "object"), serialize(x, NULL), timeout)
-}
+  # Sends an R object to one receiver and waits until it confirms
 
-wormhole_send_file = function(path, timeout = 600) {
-  payload = readBin(path, "raw", n = file.size(path))
-  wormhole_offer(list(kind = "file", name = basename(path)), payload, timeout)
-}
-
-wormhole_offer = function(header, payload, timeout) {
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(wormhole_port)
@@ -95,15 +95,15 @@ wormhole_offer = function(header, payload, timeout) {
   ))
 
   conn = lst$accept(timeout = timeout)
-  # Once the receiver is in, nobody else can use the address.
+
+  # One transfer per address: nobody else can connect once the receiver has
   lst$close()
 
-  header$size = length(payload)
-  header |>
-    jsonlite::toJSON(auto_unbox = TRUE) |>
-    conn$write_message(timeout = 60)
+  # The protocol: the serialized object, then "ok" from the receiver
+  payload = serialize(x, NULL)
   conn$write_message(payload, timeout = timeout)
 
+  # The reply is "ok", so a longer one is refused without reading it
   reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
@@ -113,49 +113,32 @@ wormhole_offer = function(header, payload, timeout) {
   cli::cli_inform("Sent {format_bytes(length(payload))}.")
   invisible(TRUE)
 }
-
-format_bytes = function(n) {
-  structure(n, class = "object_size") |>
-    format(units = "auto", standard = "SI")
-}
 ```
 
-The address is a `tailcat_secret`, which prints as `<redacted>`, so `wormhole_offer()` calls `tailcat_reveal()` to show it deliberately. This is the one place the secret is meant to appear.
+The address is a `tailcat_secret`, which prints as `<redacted>`, so `wormhole_send()` calls `tailcat_reveal()` to show it deliberately. This is the one place the secret is meant to appear.
 
 Closing a server tears down its connections at once, so the receiver might not see the end of the stream cleanly. Closing the connection first and then calling `$close(drain = 5)` waits up to five seconds for that shutdown to reach the other side before closing the server. The receiver does the same with its client.
 
-The receiver dials the sender, reads the header and checks the announced size against its own limit, reads the payload, and only then confirms. A file is written to `dir` under the name the sender gave, after checking that the name cannot point anywhere else and that it would not overwrite an existing file.
+The receiver dials the sender, reads the object, and only then confirms. `max_bytes` is checked against the length at the start of the message, so an object larger than the receiver is willing to accept is refused before any of it is read.
 
 ```{r}
 #| label: wormhole-def-receive
-wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) {
+wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
+  # Receives one R object from the sender at `address` and returns it
+
   cl = TailcatClient$new(address)
   on.exit(cl$close(), add = TRUE)
   conn = cl$dial(wormhole_port, timeout = 60)
 
-  header = conn$read_message(timeout = timeout, as = "text", max_bytes = 4096)
-  if (is.null(header)) {
+  payload = conn$read_message(timeout = timeout, max_bytes = max_bytes)
+  if (is.null(payload)) {
     cli::cli_abort("The sender closed the connection without sending anything.")
   }
-  header = jsonlite::fromJSON(header)
-  if (header$size > max_bytes) {
-    cli::cli_abort(
-      "The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows."
-    )
-  }
-  what = if (header$kind == "file") header$name else "an R object"
-  cli::cli_inform("Receiving {what} ({format_bytes(header$size)}).")
 
-  # The announced size doubles as the limit, so the sender cannot send more.
-  payload = conn$read_message(timeout = timeout, max_bytes = header$size)
-  if (is.null(payload)) {
-    cli::cli_abort("The sender closed the connection before sending the data.")
-  }
-  value = if (header$kind == "file") {
-    wormhole_save(payload, header$name, dir)
-  } else {
-    unserialize(payload)
-  }
+  # unserialize() can run code, which is acceptable only because the receiver
+  # dialed an address the sender gave them and so knows who is sending
+  value = unserialize(payload)
+  cli::cli_inform("Received {format_bytes(length(payload))}.")
 
   conn$write_message("ok", timeout = 60)
   conn$close_write()
@@ -163,24 +146,9 @@ wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) 
   cl$close(drain = 5)
   value
 }
-
-wormhole_save = function(payload, name, dir) {
-  # The name comes from the sender, so it must not be able to point elsewhere.
-  safe = is.character(name) && length(name) == 1 && nzchar(name) &&
-    name == basename(name) && !name %in% c(".", "..")
-  if (!safe) {
-    cli::cli_abort("The sender offered an unsafe file name.")
-  }
-  path = file.path(dir, name)
-  if (file.exists(path)) {
-    cli::cli_abort("{.path {path}} already exists.")
-  }
-  writeBin(payload, path)
-  path
-}
 ```
 
-`unserialize()` can run code while it rebuilds an object, so use `wormhole_receive()` for objects only from senders you trust. Here that is natural: the receiver connects to an address that the sender gave them, so they already know who is on the other end. Files are written as bytes and are not interpreted.
+`unserialize()` can run code while it rebuilds an object, so use `wormhole_receive()` only with senders you trust. Here that is natural: the receiver connects to an address that the sender gave them, so they already know who is on the other end.
 
 ### Using it
 
@@ -204,7 +172,7 @@ The receiver pastes the address into `wormhole_receive()`:
 #| class-source: receiver
 library(rtailcat)
 cars = wormhole_receive("tcAbC...xYz")
-#> Receiving an R object (3.8 kB).
+#> Received 3.8 kB.
 head(cars, 3)
 #>                mpg cyl disp  hp drat    wt  qsec vs am gear carb
 #> Mazda RX4     21.0   6  160 110 3.90 2.620 16.46  0  1    4    4
@@ -212,220 +180,13 @@ head(cars, 3)
 #> Datsun 710    22.8   4  108  93 3.85 2.320 18.61  1  1    4    1
 ```
 
-Files work the same way. Each call starts a new server with a new address, so an address that was used once is worthless afterwards.
+Each call starts a new server with a new address, so an address that was used once is worthless afterwards.
 
-```{r}
-#| label: wormhole-sender-file
-#| class-source: sender
-#| blocks: true
-write.csv(mtcars, "mtcars.csv")
-wormhole_send_file("mtcars.csv")
-#> Waiting for the receiver. Give them this address privately:
-#> tcDeF...uVw
-#> Sent 1.8 kB.
-```
+### Extending it to files
 
-```{r}
-#| label: wormhole-receiver-file
-#| class-source: receiver
-path = wormhole_receive("tcDeF...uVw")
-#> Receiving mtcars.csv (1.8 kB).
-path
-#> [1] "./mtcars.csv"
-nrow(read.csv(path))
-#> [1] 32
-```
+Sending a file is mostly a matter of telling the receiver what it is getting. The sender would first send a small header message, for example JSON with the file's name and size, and then the file's bytes (read with `readBin()`) instead of a serialized object. The receiver would read the header with a small `max_bytes`, since a header is only a few dozen bytes, check the announced size against its own limit, and then read the data with `max_bytes` set to that size, so the sender cannot send more than it announced. The same header can carry a `kind` field so that one receiver handles both objects and files.
 
-## remote: running R code on another machine
-
-Suppose the data or the computing power you need sits on a workstation in your lab or office, behind a firewall that does not let you in. With remote, the workstation runs `remote_serve()`, and from anywhere you can send it R code to evaluate and get the results back.
-
-This is much more powerful than sending a file, and so it needs more care. Anyone who can reach the server can run any R code on the host, so the host should accept only the clients it knows. tailcat supports this directly: each side can have a stable key pair, and a server given `allowed_clients` accepts connections only from those public keys. Stable keys also give the host a stable address, so the client can keep using it across restarts of the server.
-
-`tailcat_keygen(path)` creates a key pair the first time and saves it in a file only you can read, and later calls load it from there. The file contains the private key and pre-shared key, so treat it like an SSH private key.
-
-The host side accepts one connection at a time and handles requests on it until the client disconnects. Each request is a message holding a serialized R expression, evaluated in a fresh environment; the reply carries the value, any printed output, and the error message if evaluation failed.
-
-```{r}
-#| label: remote-def-serve
-remote_port = 4405L
-
-remote_serve = function(keys, allowed_clients, max_bytes = 1e8) {
-  srv = TailcatServer$new(key = keys, allowed_clients = allowed_clients)
-  on.exit(srv$close(), add = TRUE)
-  lst = srv$listen(remote_port)
-  address = tailcat_reveal(srv$address)
-  cli::cli_inform(c(
-    "Serving R for {length(allowed_clients)} client{?s} at this address:",
-    "{address}"
-  ))
-  repeat {
-    conn = lst$accept()
-    cli::cli_inform("Client connected.")
-    tryCatch(
-      remote_session(conn, max_bytes),
-      error = \(e) cli::cli_inform(c("The connection failed:", "x" = "{conditionMessage(e)}"))
-    )
-    conn$close()
-  }
-}
-
-remote_session = function(conn, max_bytes) {
-  n = 0
-  repeat {
-    # NULL means the client ended the stream between requests.
-    request = conn$read_message(max_bytes = max_bytes)
-    if (is.null(request)) {
-      break
-    }
-    reply = request |> unserialize() |> remote_run()
-    conn$write_message(serialize(reply, NULL), timeout = 600)
-    n = n + 1
-  }
-  cli::cli_inform("Client disconnected after {n} request{?s}.")
-}
-
-remote_run = function(expr) {
-  # A fresh environment per request, so requests cannot see each other's variables.
-  env = new.env(parent = globalenv())
-  output = utils::capture.output({
-    result = tryCatch(
-      withVisible(eval(expr, env)),
-      error = \(e) list(value = NULL, visible = FALSE, error = conditionMessage(e))
-    )
-  })
-  result$output = output
-  result
-}
-```
-
-On the client, `remote_eval()` sends an expression as written, and `remote_call()` sends a function together with arguments that are evaluated locally first. Printed output from the host is shown locally, and an error on the host becomes an error of class `remote_error`.
-
-```{r}
-#| label: remote-def-client
-remote_connect = function(address, keys) {
-  cl = TailcatClient$new(address, key = keys)
-  conn = tryCatch(
-    cl$dial(remote_port, timeout = 60),
-    error = \(e) {
-      cl$close()
-      stop(e)
-    }
-  )
-  structure(list(client = cl, conn = conn), class = "remote_session")
-}
-
-remote_eval = function(session, expr, timeout = 600) {
-  remote_request(session, substitute(expr), timeout)
-}
-
-remote_call = function(session, fun, ..., .timeout = 600) {
-  remote_request(session, as.call(list(fun, ...)), .timeout)
-}
-
-remote_request = function(session, expr, timeout, call = rlang::caller_env()) {
-  session$conn$write_message(serialize(expr, NULL), timeout = timeout)
-  reply = session$conn$read_message(timeout = timeout)
-  if (is.null(reply)) {
-    cli::cli_abort("The host closed the connection.", call = call)
-  }
-  result = unserialize(reply)
-  if (length(result$output) > 0) {
-    cat(result$output, sep = "\n")
-  }
-  if (!is.null(result$error)) {
-    cli::cli_abort(
-      c("The code failed on the host.", "x" = "{result$error}"),
-      class = "remote_error",
-      call = call
-    )
-  }
-  if (result$visible) result$value else invisible(result$value)
-}
-
-remote_close = function(session) {
-  # Tell the host we are done, then give the shutdown time to reach it.
-  session$conn$close_write()
-  session$conn$close()
-  session$client$close(drain = 5)
-  invisible()
-}
-
-print.remote_session = function(x, ...) {
-  state = if (x$conn$is_closed) "closed" else "connected"
-  cat("<remote session, ", state, ">\n", sep = "")
-  invisible(x)
-}
-```
-
-A function sent with `remote_call()` is serialized with its environment. A function defined at the top level of your session refers to the global environment, which is not sent, so on the host it sees the host's global environment instead of your variables; pass what it needs as arguments.
-
-### Using it
-
-The client creates its keys once and gives its public key to whoever runs the host. A public key is not a secret.
-
-```{r}
-#| label: remote-client-keys
-#| class-source: client
-library(rtailcat)
-keys = tailcat_keygen("~/.config/remote/client.json")
-keys$public_key
-#> [1] "nodekey:3f1c...9a0e"
-```
-
-The host does the same for itself and starts serving, allowing only that client. `remote_serve()` runs until it is interrupted, so run it in a dedicated R session, for example inside tmux or screen on the workstation. Thanks to the stable keys, its address stays the same every time it is restarted.
-
-```{r}
-#| label: remote-host-serve
-#| class-source: host
-#| blocks: true
-library(rtailcat)
-keys = tailcat_keygen("~/.config/remote/host.json")
-remote_serve(keys, allowed_clients = "nodekey:3f1c...9a0e")
-#> Serving R for 1 client at this address:
-#> tcAbC...xYz
-#> Client connected.
-#> Warning: cannot open file 'no-such-file.csv': No such file or directory
-#> Client disconnected after 5 requests.
-```
-
-The client connects with the host's address and its own keys, then sends code. Each call is one round trip over the same connection.
-
-```{r}
-#| label: remote-client-use
-#| class-source: client
-r = remote_connect("tcAbC...xYz", keys)
-remote_eval(r, summary(lm(mpg ~ wt, data = mtcars))$r.squared)
-#> [1] 0.7528328
-remote_call(r, function(n) {
-  set.seed(1)
-  x = rowMeans(matrix(rexp(n * 10), ncol = 10))
-  cat("Simulated", n, "means on the host\n")
-  round(quantile(x, c(0.025, 0.975)), 3)
-}, 1e6)
-#> Simulated 1e+06 means on the host
-#>  2.5% 97.5% 
-#> 0.480 1.707 
-remote_eval(r, assign("x", 1))
-remote_eval(r, exists("x"))
-#> [1] FALSE
-```
-
-The last two calls show that each request runs in a fresh environment: `x` does not survive from one request to the next. Errors on the host arrive as errors on the client, and the connection stays usable. Only printed output and errors are sent back; warnings and messages stay on the host, like the warning from `read.csv()` in the host's output above.
-
-```{r}
-#| label: remote-client-error
-#| class-source: client
-remote_eval(r, read.csv("no-such-file.csv"))
-#> Error in `remote_eval()`:
-#> ! The code failed on the host.
-#> ✖ cannot open the connection
-remote_close(r)
-```
-
-A client whose key is not in `allowed_clients` cannot connect at all, even with the right address: its `remote_connect()` runs out its timeout. To allow another client while the host is running, call `$allow_client()` on the server; here that would mean adding an argument to `remote_serve()` or reading the allowed keys from a file.
-
-`remote_serve()` handles one client at a time, and while it evaluates a request it does nothing else. That is fine for one person using their own workstation. Several users, or several requests in parallel, would call for one worker process per connection, for example with callr or mirai, but the protocol would stay the same.
+The file name comes from the sender, so the receiver has to treat it as untrusted: accept it only if it equals its own `basename()` and is not `"."` or `".."`, so it cannot point outside the target folder, and refuse to overwrite a file that already exists. In return, files are written as bytes with `writeBin()` and never interpreted, so a file transfer does not need the trust that `unserialize()` does.
 
 ## progress: watching a long-running job over UDP
 
@@ -439,25 +200,9 @@ The monitor listens on a UDP port and calls a handler for each flow, one per job
 
 ```{r}
 #| label: progress-def-monitor
-progress_monitor = function(port = 9000L) {
-  srv = TailcatServer$new()
-  lst = srv$listen(port, network = "udp")
-  monitor = new.env(parent = emptyenv())
-  monitor$server = srv
-  monitor$events = list()
-  # One flow per job. A flow that fails is closed; there is nothing to report.
-  lst$serve(\(conn) {
-    conn$read_loop(\(datagram) progress_record(monitor, datagram), on_error = \(e) NULL)
-  })
-  address = tailcat_reveal(srv$address)
-  cli::cli_inform(c(
-    "Collecting progress reports on UDP port {port}. Address for the jobs:",
-    "{address}"
-  ))
-  structure(monitor, class = "progress_monitor")
-}
-
 progress_record = function(monitor, datagram) {
+  # Stores one report, ignoring datagrams that are not JSON objects
+
   event = tryCatch(
     datagram |> rawToChar() |> jsonlite::fromJSON(),
     error = \(e) NULL
@@ -469,12 +214,40 @@ progress_record = function(monitor, datagram) {
   invisible()
 }
 
+progress_monitor = function(port = 9000L) {
+  # Starts collecting progress reports in the background and returns the monitor
+
+  srv = TailcatServer$new()
+  lst = srv$listen(port, network = "udp")
+  monitor = new.env(parent = emptyenv())
+  monitor$server = srv
+  monitor$events = list()
+
+  # A failed flow is closed anyway and there is no one to tell, so its error is
+  # dropped instead of becoming a warning
+  lst$serve(\(conn) {
+    conn$read_loop(
+      \(datagram) progress_record(monitor, datagram),
+      on_error = \(e) NULL
+    )
+  })
+  address = tailcat_reveal(srv$address)
+  cli::cli_inform(c(
+    "Collecting progress reports on UDP port {port}. Address for the jobs:",
+    "{address}"
+  ))
+  structure(monitor, class = "progress_monitor")
+}
+
 progress_data = function(monitor) {
+  # Returns the reports as a data frame with one row per report, ordered by job and sequence number
+
   events = monitor$events
   if (length(events) == 0) {
     return(data.frame())
   }
-  # Reports may carry different fields, so fill the missing ones with NA.
+
+  # Reports may carry different fields
   cols = events |> lapply(names) |> unlist() |> unique()
   rows = lapply(events, \(e) {
     e[setdiff(cols, names(e))] = NA
@@ -487,14 +260,20 @@ progress_data = function(monitor) {
 }
 
 progress_stop = function(monitor) {
+  # Stops collecting reports and closes the monitor's server
+
   monitor$server$close()
   invisible()
 }
 
 print.progress_monitor = function(x, ...) {
+  # Shows how many reports have arrived from how many jobs
+
   n = length(x$events)
   jobs = vapply(x$events, \(e) e$job, character(1)) |> unique() |> length()
-  cat(cli::pluralize("<progress monitor> {n} report{?s} from {jobs} job{?s}"), "\n", sep = "")
+  "<progress monitor> {n} report{?s} from {jobs} job{?s}" |>
+    cli::pluralize() |>
+    cat("\n", sep = "")
   invisible(x)
 }
 ```
@@ -506,6 +285,8 @@ The job side dials the monitor once and then sends one datagram per report. Each
 ```{r}
 #| label: progress-def-reporter
 progress_reporter = function(address, job, port = 9000L) {
+  # Connects a job to a monitor and returns a reporter for progress_report()
+
   cl = TailcatClient$new(address)
   reporter = new.env(parent = emptyenv())
   reporter$client = cl
@@ -516,20 +297,29 @@ progress_reporter = function(address, job, port = 9000L) {
 }
 
 progress_report = function(reporter, ...) {
+  # Sends one report with the fields in `...` and returns whether it was sent
+
   reporter$seq = reporter$seq + 1L
-  event = list(job = reporter$job, seq = reporter$seq, sent = as.numeric(Sys.time()), ...)
+  event = list(
+    job = reporter$job,
+    seq = reporter$seq,
+    sent = as.numeric(Sys.time()),
+    ...
+  )
   payload = event |>
     jsonlite::toJSON(auto_unbox = TRUE, digits = NA) |>
     charToRaw()
   limit = tailcat_udp_max_payload()
   if (length(payload) > limit) {
-    cli::cli_warn(
-      "Report {reporter$seq} is {length(payload)} bytes, over the {limit} bytes a datagram can hold, and was not sent."
-    )
+    cli::cli_warn(c(
+      "Report {reporter$seq} was not sent.",
+      "i" = "It is {length(payload)} bytes; a datagram holds at most {limit}."
+    ))
     return(invisible(FALSE))
   }
+
   # Monitoring must never slow down or stop the job, so a failed send is
-  # given up after a second and otherwise ignored.
+  # given up after a second and otherwise ignored
   sent = tryCatch(
     {
       reporter$conn$write(payload, timeout = 1)
@@ -541,6 +331,8 @@ progress_report = function(reporter, ...) {
 }
 
 progress_done = function(reporter) {
+  # Disconnects the reporter from the monitor
+
   reporter$client$close()
   invisible()
 }
@@ -551,13 +343,15 @@ Finally, a small Shiny app plots one metric against another, with a line per job
 ```{r}
 #| label: progress-def-app
 progress_app = function(monitor, x = "iter", y = "loss") {
+  # A Shiny app plotting `y` against `x` for each job, with their latest reports
+
   ui = shiny::fluidPage(
     shiny::titlePanel("Job progress"),
     shiny::plotOutput("plot"),
     shiny::tableOutput("latest")
   )
   server = function(input, output, session) {
-    # Polling is enough: the monitor collects reports on its own.
+    # Polling is enough: the monitor collects reports on its own
     data = shiny::reactivePoll(
       1000,
       session,
@@ -573,7 +367,13 @@ progress_app = function(monitor, x = "iter", y = "loss") {
         rows = d$job == jobs[i]
         graphics::lines(d[[x]][rows], d[[y]][rows], col = i, lwd = 2)
       }
-      graphics::legend("topright", legend = jobs, col = seq_along(jobs), lwd = 2, bty = "n")
+      graphics::legend(
+        "topright",
+        legend = jobs,
+        col = seq_along(jobs),
+        lwd = 2,
+        bty = "n"
+      )
     })
     output$latest = shiny::renderTable({
       d = data()
@@ -652,6 +452,239 @@ shiny::runApp(progress_app(m))
 progress_stop(m)
 ```
 
-The monitor's address changes every time it starts. To keep one address for all your jobs, create keys once with `tailcat_keygen(path)`, which saves them securely and loads them on later calls, and pass them to `TailcatServer$new(key = keys)` in `progress_monitor()`, as `remote_serve()` does.
+The monitor's address changes every time it starts. To keep one address for all your jobs, create keys once with `tailcat_keygen(path)`, which saves them securely and loads them on later calls, and pass them to `TailcatServer$new(key = keys)` in `progress_monitor()`.
 
 In an R script run with `Rscript`, rather than at the console, nothing runs the event loop while the script waits, so call `tailcat_run()` to keep collecting reports, for example `tailcat_run(timeout = 3600)` for an hour.
+
+## proxy: opening a web app on another machine
+
+R is good at serving small web apps and APIs, with plumber or httpuv, but an app started on a workstation, a cluster node, or a cloud machine usually listens only on that machine. With proxy, the machine running the app calls `proxy_share()`, which prints an address; on your own machine `proxy_open()` takes that address and gives you a local URL, and requests to it reach the app as if you were sitting at the other machine.
+
+Each request goes over its own tailcat connection, as two messages: a small JSON head with the method, path, and headers, then the body as raw bytes. The response comes back the same way, with the status and headers in the head. Keeping the body out of the JSON means it needs no encoding and its size limit can be checked before it is read. Both sides use the same two functions to send and receive one of these pairs.
+
+```{r}
+#| label: proxy-def-messages
+proxy_port = 4406L
+
+proxy_send = function(conn, head, body) {
+  # Sends one request or response: a JSON head, then the body as its own message
+
+  head$headers = I(head$headers)
+  head |>
+    jsonlite::toJSON(auto_unbox = TRUE) |>
+    conn$write_message(timeout = 60)
+  conn$write_message(body, timeout = 60)
+}
+
+proxy_receive = function(conn, max_bytes) {
+  # Reads one request or response sent with proxy_send(), or NULL if the other side closed the
+  # connection first
+
+  head = conn$read_message(timeout = 60, as = "text", max_bytes = 65536)
+  if (is.null(head)) {
+    return(NULL)
+  }
+  head = jsonlite::fromJSON(head)
+  head$headers = as.character(unlist(head$headers))
+  head$body = conn$read_message(timeout = 60, max_bytes = max_bytes)
+  head
+}
+```
+
+Headers travel as `"Name: value"` lines, as in HTTP itself, which keeps repeated headers such as `Set-Cookie` intact. A few headers describe a single connection rather than the request, such as `Content-Length` and `Connection`; each side's HTTP library sets those itself, so they are dropped on the way. So is compression: curl asks the app for compressed responses and decompresses them itself, so the encoding headers would no longer match the body.
+
+```{r}
+#| label: proxy-def-headers
+proxy_drop_headers = c(
+  "connection", "keep-alive", "transfer-encoding", "content-length", "host", "upgrade",
+  "accept-encoding", "content-encoding"
+)
+
+proxy_clean_headers = function(lines) {
+  # Drops the headers that each side's HTTP library sets for itself
+
+  names = lines |> sub(pattern = ":.*", replacement = "") |> tolower()
+  lines[!names %in% proxy_drop_headers]
+}
+
+proxy_header_list = function(lines) {
+  # Turns "Name: value" lines into the named list that curl and httpuv take
+
+  values = sub("^[^:]*:[[:space:]]*", "", lines)
+  stats::setNames(as.list(values), sub(":.*", "", lines))
+}
+
+proxy_error = function(e) {
+  # A 502 response saying why the proxy could not get an answer
+
+  list(
+    status = 502L,
+    headers = "Content-Type: text/plain; charset=utf-8",
+    body = charToRaw(paste("The proxy could not reach the app:", conditionMessage(e)))
+  )
+}
+```
+
+On the machine with the app, a server accepts one connection per request, replays the request against the app on `127.0.0.1` with curl, and sends back whatever the app answered.
+
+```{r}
+#| label: proxy-def-share
+proxy_forward = function(request, app_port) {
+  # Replays a request against the app on this machine and returns the app's response
+
+  # The path comes from the other side; a path that does not start with "/", such as
+  # "@example.com/", would change the host the request goes to
+  if (!startsWith(request$path, "/")) {
+    stop("The request path must start with \"/\".")
+  }
+  handle = curl::new_handle(customrequest = request$method, followlocation = FALSE)
+  curl::handle_setheaders(handle, .list = proxy_header_list(request$headers))
+  if (length(request$body) > 0) {
+    curl::handle_setopt(handle, copypostfields = request$body)
+  }
+  url = paste0("http://127.0.0.1:", app_port, request$path)
+  res = curl::curl_fetch_memory(url, handle = handle)
+  headers = curl::parse_headers(res$headers)[-1]
+  list(status = res$status_code, headers = proxy_clean_headers(headers), body = res$content)
+}
+
+proxy_answer = function(conn, app_port, max_bytes) {
+  # Answers one request that arrived on `conn` and closes the connection
+
+  on.exit(conn$close())
+  request = proxy_receive(conn, max_bytes)
+  if (is.null(request)) {
+    return(invisible())
+  }
+  response = tryCatch(proxy_forward(request, app_port), error = proxy_error)
+  proxy_send(conn, response[c("status", "headers")], response$body)
+}
+
+proxy_share = function(app_port, max_bytes = 1e8) {
+  # Makes the app listening on `app_port` of this machine reachable through a new address
+
+  srv = TailcatServer$new()
+  lst = srv$listen(proxy_port)
+  lst$serve(\(conn) proxy_answer(conn, app_port, max_bytes))
+  address = tailcat_reveal(srv$address)
+  cli::cli_inform(c(
+    "Sharing the app on port {app_port}. Address for the other machine:",
+    "{address}"
+  ))
+  invisible(srv)
+}
+```
+
+Anyone with the address can use the app through it, so share the address only with people who may use the app. The proxy only ever connects to the one port it was given on `127.0.0.1`, and it checks the path because a path that does not start with `/` would turn the URL into one for another host.
+
+On your machine, `proxy_open()` starts a small httpuv server on `127.0.0.1` whose only job is to pass each request on: it dials the other side, sends the request, and hands the response back to httpuv. If anything fails on the way, the browser gets a 502 response that says why.
+
+```{r}
+#| label: proxy-def-open
+proxy_fetch = function(cl, req) {
+  # Sends one request from httpuv to the other machine and returns the response for httpuv
+
+  request = list(
+    method = req$REQUEST_METHOD,
+    path = paste0(req$PATH_INFO, req$QUERY_STRING),
+    headers = proxy_clean_headers(paste0(names(req$HEADERS), ": ", req$HEADERS))
+  )
+  body = req$rook.input$read()
+  response = tryCatch(
+    {
+      conn = cl$dial(proxy_port, timeout = 30)
+      on.exit(conn$close())
+      proxy_send(conn, request, body)
+      response = proxy_receive(conn, max_bytes = Inf)
+      if (is.null(response)) {
+        stop("The other side closed the connection.")
+      }
+      response
+    },
+    error = proxy_error
+  )
+  list(
+    status = as.integer(response$status),
+    headers = proxy_header_list(response$headers),
+    body = response$body
+  )
+}
+
+proxy_open = function(address, port = 8080L) {
+  # Serves the app shared at `address` on http://127.0.0.1:`port` of this machine
+
+  cl = TailcatClient$new(address)
+  server = httpuv::startServer("127.0.0.1", port, list(call = \(req) proxy_fetch(cl, req)))
+  cli::cli_inform("Open {.url http://127.0.0.1:{port}} to use the app on the other machine.")
+  structure(list(client = cl, server = server), class = "proxy")
+}
+
+proxy_close = function(proxy) {
+  # Stops the local server and disconnects from the other machine
+
+  httpuv::stopServer(proxy$server)
+  proxy$client$close()
+  invisible()
+}
+```
+
+The functions handle one request at a time on each side, which is plenty for one person using an app; an app that keeps many requests in flight would call for the `_async()` methods and returning promises to httpuv. Only plain HTTP is forwarded. WebSockets, which Shiny apps use, need the connection to stay open in both directions, which would mean forwarding raw bytes instead of requests.
+
+### Using it
+
+On the machine with the app, the app has to run in its own R process: `proxy_share()` waits for the app while it answers a request, and an app in the same process could not answer at that moment. Here a tiny httpuv app, started in the background with callr, stands in for a real one such as a plumber API.
+
+```{r}
+#| label: proxy-app-share
+#| class-source: app
+library(rtailcat)
+app = callr::r_bg(\() {
+  httpuv::runServer("127.0.0.1", 8000, list(call = \(req) {
+    list(
+      status = 200L,
+      headers = list("Content-Type" = "text/plain"),
+      body = paste("Hello from the app; you asked for", req$PATH_INFO)
+    )
+  }))
+})
+srv = proxy_share(8000)
+#> Sharing the app on port 8000. Address for the other machine:
+#> tcAbC...xYz
+```
+
+On your machine, open the proxy with that address. Then point a browser at the URL it prints.
+
+```{r}
+#| label: proxy-browser-open
+#| class-source: browser
+library(rtailcat)
+p = proxy_open("tcAbC...xYz", port = 8080)
+#> Open <http://127.0.0.1:8080> to use the app on the other machine.
+```
+
+```{r}
+#| label: proxy-browser-view
+#| class-source: browser
+#| run: false
+browseURL("http://127.0.0.1:8080/hello")
+```
+
+From R the request has to come from another process, for the same reason as on the other side: the proxy answers it in this session, while the session waits.
+
+```{r}
+#| label: proxy-browser-fetch
+#| class-source: browser
+fetch = callr::r_bg(\() readLines("http://127.0.0.1:8080/hello", warn = FALSE))
+tailcat_run(until = \() !fetch$is_alive(), timeout = 30)
+fetch$get_result()
+#> [1] "Hello from the app; you asked for /hello"
+proxy_close(p)
+```
+
+```{r}
+#| label: proxy-app-stop
+#| class-source: app
+srv$close()
+app$kill()
+#> [1] TRUE
+```

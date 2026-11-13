@@ -1,17 +1,18 @@
-# Generated from vignettes/building-on-rtailcat.qmd by tools/vignette.R; edit the vignette, not this file.
+# Generated from vignettes/building-on-rtailcat.qmd by tools/vignette.R
+# Edit the vignette, not this file
 
 wormhole_port = 4404L
 
+format_bytes = function(n) {
+  # Formats a byte count for messages, such as "3.8 kB"
+
+  structure(n, class = "object_size") |>
+    format(units = "auto", standard = "SI")
+}
+
 wormhole_send = function(x, timeout = 600) {
-  wormhole_offer(list(kind = "object"), serialize(x, NULL), timeout)
-}
+  # Sends an R object to one receiver and waits until it confirms
 
-wormhole_send_file = function(path, timeout = 600) {
-  payload = readBin(path, "raw", n = file.size(path))
-  wormhole_offer(list(kind = "file", name = basename(path)), payload, timeout)
-}
-
-wormhole_offer = function(header, payload, timeout) {
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(wormhole_port)
@@ -22,15 +23,15 @@ wormhole_offer = function(header, payload, timeout) {
   ))
 
   conn = lst$accept(timeout = timeout)
-  # Once the receiver is in, nobody else can use the address.
+
+  # One transfer per address: nobody else can connect once the receiver has
   lst$close()
 
-  header$size = length(payload)
-  header |>
-    jsonlite::toJSON(auto_unbox = TRUE) |>
-    conn$write_message(timeout = 60)
+  # The protocol: the serialized object, then "ok" from the receiver
+  payload = serialize(x, NULL)
   conn$write_message(payload, timeout = timeout)
 
+  # The reply is "ok", so a longer one is refused without reading it
   reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
@@ -41,58 +42,26 @@ wormhole_offer = function(header, payload, timeout) {
   invisible(TRUE)
 }
 
-format_bytes = function(n) {
-  structure(n, class = "object_size") |>
-    format(units = "auto", standard = "SI")
-}
+wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
+  # Receives one R object from the sender at `address` and returns it
 
-wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) {
   cl = TailcatClient$new(address)
   on.exit(cl$close(), add = TRUE)
   conn = cl$dial(wormhole_port, timeout = 60)
 
-  header = conn$read_message(timeout = timeout, as = "text", max_bytes = 4096)
-  if (is.null(header)) {
+  payload = conn$read_message(timeout = timeout, max_bytes = max_bytes)
+  if (is.null(payload)) {
     cli::cli_abort("The sender closed the connection without sending anything.")
   }
-  header = jsonlite::fromJSON(header)
-  if (header$size > max_bytes) {
-    cli::cli_abort(
-      "The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows."
-    )
-  }
-  what = if (header$kind == "file") header$name else "an R object"
-  cli::cli_inform("Receiving {what} ({format_bytes(header$size)}).")
 
-  # The announced size doubles as the limit, so the sender cannot send more.
-  payload = conn$read_message(timeout = timeout, max_bytes = header$size)
-  if (is.null(payload)) {
-    cli::cli_abort("The sender closed the connection before sending the data.")
-  }
-  value = if (header$kind == "file") {
-    wormhole_save(payload, header$name, dir)
-  } else {
-    unserialize(payload)
-  }
+  # unserialize() can run code, which is acceptable only because the receiver
+  # dialed an address the sender gave them and so knows who is sending
+  value = unserialize(payload)
+  cli::cli_inform("Received {format_bytes(length(payload))}.")
 
   conn$write_message("ok", timeout = 60)
   conn$close_write()
   conn$close()
   cl$close(drain = 5)
   value
-}
-
-wormhole_save = function(payload, name, dir) {
-  # The name comes from the sender, so it must not be able to point elsewhere.
-  safe = is.character(name) && length(name) == 1 && nzchar(name) &&
-    name == basename(name) && !name %in% c(".", "..")
-  if (!safe) {
-    cli::cli_abort("The sender offered an unsafe file name.")
-  }
-  path = file.path(dir, name)
-  if (file.exists(path)) {
-    cli::cli_abort("{.path {path}} already exists.")
-  }
-  writeBin(payload, path)
-  path
 }

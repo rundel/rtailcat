@@ -7,7 +7,7 @@ examples_dir = function() {
   system.file("examples", package = "rtailcat", mustWork = TRUE)
 }
 
-example_files = c("wormhole", "remote", "progress")
+example_files = c("wormhole", "progress", "proxy")
 
 load_examples = function(env = parent.frame()) {
   withr::local_options(rtailcat.region = relay_region(), rtailcat.derp_map_url = relay_derp_map_url(), .local_envir = env)
@@ -46,28 +46,17 @@ child_address = function(proc) {
 test_that("the example files parse and define the documented functions", {
   ex = load_examples()
   fns = c(
-    "wormhole_send", "wormhole_send_file", "wormhole_receive",
-    "remote_serve", "remote_connect", "remote_eval", "remote_call", "remote_close",
+    "wormhole_send", "wormhole_receive",
     "progress_monitor", "progress_record", "progress_data", "progress_stop", "progress_app",
-    "progress_reporter", "progress_report", "progress_done"
+    "progress_reporter", "progress_report", "progress_done",
+    "proxy_share", "proxy_open", "proxy_close"
   )
   for (fn in fns) {
     expect_true(is.function(ex[[fn]]), label = fn)
   }
 })
 
-test_that("wormhole refuses unsafe file names and existing files", {
-  ex = load_examples()
-  dir = withr::local_tempdir()
-  for (name in c("../x", "a/b", "", ".", "..")) {
-    expect_error(ex$wormhole_save(raw(1), name, dir), "unsafe")
-  }
-  path = ex$wormhole_save(charToRaw("x"), "f.txt", dir)
-  expect_identical(readLines(path, warn = FALSE), "x")
-  expect_error(ex$wormhole_save(raw(1), "f.txt", dir), "already exists")
-})
-
-test_that("wormhole sends an object and a file", {
+test_that("wormhole sends an object and refuses one over max_bytes", {
   skip_relay()
   skip_if_not_installed("processx")
   ex = load_examples()
@@ -77,40 +66,15 @@ test_that("wormhole sends an object and a file", {
   expect_identical(got, mtcars)
   expect_match(paste(child_finish(child)$stdout, collapse = "\n"), "Sent")
 
-  src = withr::local_tempfile(fileext = ".csv")
-  write.csv(mtcars, src)
-  child = example_child(paste0("wormhole_send_file(", deparse(src), ", timeout = 60)"))
-  dest = withr::local_tempdir()
-  path = suppressMessages(ex$wormhole_receive(child_address(child), dir = dest, timeout = 60))
-  expect_identical(basename(path), basename(src))
-  expect_identical(readLines(path), readLines(src))
-  child_finish(child)
-})
-
-test_that("remote evaluates requests from an allowed client", {
-  skip_relay()
-  skip_if_not_installed("processx")
-  ex = load_examples()
-  keys = tailcat_keygen()
-  child = example_child(c(
-    "keys = tailcat_keygen(tempfile())",
-    paste0("remote_serve(keys, allowed_clients = ", deparse(keys$public_key), ")")
-  ))
-  withr::defer(child$kill())
-
-  r = ex$remote_connect(child_address(child), keys)
-  expect_identical(ex$remote_eval(r, 1 + 1), 2)
-  double = eval(quote(function(x) {
-    cat("doubling\n")
-    x * 2
-  }), globalenv())
-  expect_output(expect_identical(ex$remote_call(r, double, 21), 42), "doubling")
-  expect_invisible(ex$remote_eval(r, assign("x", 1)))
-  expect_false(ex$remote_eval(r, exists("x")))
-  expect_error(ex$remote_eval(r, stop("boom")), class = "remote_error")
-  expect_identical(ex$remote_eval(r, "still usable"), "still usable")
-  ex$remote_close(r)
-  expect_true(r$conn$is_closed)
+  child = example_child("wormhole_send(mtcars, timeout = 60)")
+  cond = tryCatch(
+    ex$wormhole_receive(child_address(child), max_bytes = 100, timeout = 60),
+    error = identity
+  )
+  expect_s3_class(cond, "tailcat_failure")
+  expect_match(conditionMessage(cond), "more than `max_bytes`", fixed = TRUE)
+  out = child_finish(child)
+  expect_match(paste(c(out$stdout, out$stderr), collapse = "\n"), "did not confirm")
 })
 
 test_that("progress collects reports and drops oversized ones", {
@@ -132,3 +96,57 @@ test_that("progress collects reports and drops oversized ones", {
 
   expect_warning(expect_false(ex$progress_report(reporter, note = strrep("x", 2000))), "1232")
 })
+
+# Runs an HTTP client in a separate process, because the proxy answers its
+# requests on this session's event loop.
+proxy_get = function(url, ...) {
+  fetch = callr::r_bg(function(url, args) {
+    handle = do.call(curl::new_handle, args)
+    res = curl::curl_fetch_memory(url, handle = handle)
+    list(status = res$status_code, body = rawToChar(res$content))
+  }, list(url = url, args = list(...)))
+  run_until(function() !fetch$is_alive(), 30)
+  fetch$get_result()
+}
+
+test_that("proxy forwards requests to an app on the other side", {
+  skip_relay()
+  skip_if_not_installed("callr")
+  skip_if_not_installed("httpuv")
+  skip_if_not_installed("curl")
+  ex = load_examples()
+
+  app_port = httpuv::randomPort()
+  app = callr::r_bg(function(port) {
+    httpuv::runServer("127.0.0.1", port, list(call = function(req) {
+      body = rawToChar(req$rook.input$read())
+      list(
+        status = 200L,
+        headers = list("Content-Type" = "text/plain"),
+        body = paste(req$REQUEST_METHOD, req$PATH_INFO, req$QUERY_STRING, body)
+      )
+    }))
+  }, list(port = app_port))
+  withr::defer(app$kill())
+
+  child = example_child(paste0("srv = proxy_share(", app_port, "); tailcat_run(timeout = 120)"))
+  withr::defer(child$kill())
+
+  port = httpuv::randomPort()
+  p = suppressMessages(ex$proxy_open(child_address(child), port = port))
+  withr::defer(ex$proxy_close(p))
+  url = paste0("http://127.0.0.1:", port)
+
+  res = proxy_get(paste0(url, "/a/b?x=1"))
+  expect_identical(res$status, 200L)
+  expect_identical(res$body, "GET /a/b ?x=1 ")
+
+  res = proxy_get(paste0(url, "/post"), postfields = "hello")
+  expect_identical(res$body, "POST /post  hello")
+
+  app$kill()
+  res = proxy_get(paste0(url, "/gone"))
+  expect_identical(res$status, 502L)
+  expect_match(res$body, "could not reach the app")
+})
+

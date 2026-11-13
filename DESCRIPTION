@@ -23,7 +23,9 @@ Imports:
     R6 (>= 2.1.2),
     rlang (>= 1.0.0)
 Suggests:
+    callr,
     curl,
+    httpuv,
     parallel,
     processx,
     quarto,

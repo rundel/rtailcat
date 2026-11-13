@@ -131,7 +131,8 @@ example_files = function(cells) {
   defs = Filter(function(cell) !is.null(cell$def), cells)
   names = unique(vapply(defs, function(cell) cell$def, character(1)))
   header = paste0(
-    "# Generated from ", vignette_path, " by tools/vignette.R; edit the vignette, not this file.\n"
+    "# Generated from ", vignette_path, " by tools/vignette.R\n",
+    "# Edit the vignette, not this file\n"
   )
   out = lapply(names, function(name) {
     code = vapply(Filter(function(cell) cell$def == name, defs), function(cell) cell$code, character(1))

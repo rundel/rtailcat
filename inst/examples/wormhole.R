@@ -16,13 +16,21 @@ wormhole_offer = function(header, payload, timeout) {
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(wormhole_port)
   address = tailcat_reveal(srv$address)
-  cli::cli_inform(c("Waiting for the receiver. Give them this address privately:", " " = "{address}"))
+  cli::cli_inform(c(
+    "Waiting for the receiver. Give them this address privately:",
+    "{address}"
+  ))
 
   conn = lst$accept(timeout = timeout)
+  # Once the receiver is in, nobody else can use the address.
   lst$close()
+
   header$size = length(payload)
-  conn$write_message(jsonlite::toJSON(header, auto_unbox = TRUE), timeout = 60)
+  header |>
+    jsonlite::toJSON(auto_unbox = TRUE) |>
+    conn$write_message(timeout = 60)
   conn$write_message(payload, timeout = timeout)
+
   reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
@@ -34,29 +42,39 @@ wormhole_offer = function(header, payload, timeout) {
 }
 
 format_bytes = function(n) {
-  format(structure(n, class = "object_size"), units = "auto", standard = "SI")
+  structure(n, class = "object_size") |>
+    format(units = "auto", standard = "SI")
 }
 
 wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) {
   cl = TailcatClient$new(address)
   on.exit(cl$close(), add = TRUE)
   conn = cl$dial(wormhole_port, timeout = 60)
+
   header = conn$read_message(timeout = timeout, as = "text", max_bytes = 4096)
   if (is.null(header)) {
     cli::cli_abort("The sender closed the connection without sending anything.")
   }
   header = jsonlite::fromJSON(header)
   if (header$size > max_bytes) {
-    cli::cli_abort("The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows.")
+    cli::cli_abort(
+      "The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows."
+    )
   }
   what = if (header$kind == "file") header$name else "an R object"
   cli::cli_inform("Receiving {what} ({format_bytes(header$size)}).")
+
+  # The announced size doubles as the limit, so the sender cannot send more.
   payload = conn$read_message(timeout = timeout, max_bytes = header$size)
   if (is.null(payload)) {
     cli::cli_abort("The sender closed the connection before sending the data.")
   }
+  value = if (header$kind == "file") {
+    wormhole_save(payload, header$name, dir)
+  } else {
+    unserialize(payload)
+  }
 
-  value = if (header$kind == "file") wormhole_save(payload, header$name, dir) else unserialize(payload)
   conn$write_message("ok", timeout = 60)
   conn$close_write()
   conn$close()
@@ -65,7 +83,10 @@ wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) 
 }
 
 wormhole_save = function(payload, name, dir) {
-  if (!is.character(name) || length(name) != 1 || !nzchar(name) || name != basename(name) || name %in% c(".", "..")) {
+  # The name comes from the sender, so it must not be able to point elsewhere.
+  safe = is.character(name) && length(name) == 1 && nzchar(name) &&
+    name == basename(name) && !name %in% c(".", "..")
+  if (!safe) {
     cli::cli_abort("The sender offered an unsafe file name.")
   }
   path = file.path(dir, name)

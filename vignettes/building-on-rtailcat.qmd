@@ -44,12 +44,13 @@ rtailcat gives you TCP streams and UDP datagrams between two R processes that ca
 2. remote: run R code on a machine behind a firewall, such as a lab workstation.
 3. progress: watch a long-running job report its progress, live, over UDP.
 
-Each section first defines the functions and then shows them in use. The usage code always runs in two R sessions, usually on two different machines, and each code block is labeled with the machine it runs on. The code is complete and runnable; the functions are also installed with the package, and you can load them with
+Each section first defines the functions and then shows them in use. The usage code always runs in two R sessions, usually on two different machines, and each code block is labeled with the machine it runs on. The code is complete and runnable; the functions are also installed with the package, one file per example, so you can load all of them or just the one you want:
 
 ```{r}
 #| label: intro-load
-examples = system.file("examples", package = "rtailcat")
-for (f in c("wormhole.R", "remote.R", "progress.R")) source(file.path(examples, f))
+source(system.file("examples/wormhole.R", package = "rtailcat"))
+source(system.file("examples/remote.R", package = "rtailcat"))
+source(system.file("examples/progress.R", package = "rtailcat"))
 ```
 
 A tailcat address is a secret: anyone who has it can connect to the server. The output below shortens addresses to forms such as `tcAbC...xYz`, and where code needs an address you paste in the full one that the other side printed. Public keys (`nodekey:...`) are not secret, but they are shortened the same way.
@@ -88,13 +89,21 @@ wormhole_offer = function(header, payload, timeout) {
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(wormhole_port)
   address = tailcat_reveal(srv$address)
-  cli::cli_inform(c("Waiting for the receiver. Give them this address privately:", " " = "{address}"))
+  cli::cli_inform(c(
+    "Waiting for the receiver. Give them this address privately:",
+    "{address}"
+  ))
 
   conn = lst$accept(timeout = timeout)
+  # Once the receiver is in, nobody else can use the address.
   lst$close()
+
   header$size = length(payload)
-  conn$write_message(jsonlite::toJSON(header, auto_unbox = TRUE), timeout = 60)
+  header |>
+    jsonlite::toJSON(auto_unbox = TRUE) |>
+    conn$write_message(timeout = 60)
   conn$write_message(payload, timeout = timeout)
+
   reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
@@ -106,7 +115,8 @@ wormhole_offer = function(header, payload, timeout) {
 }
 
 format_bytes = function(n) {
-  format(structure(n, class = "object_size"), units = "auto", standard = "SI")
+  structure(n, class = "object_size") |>
+    format(units = "auto", standard = "SI")
 }
 ```
 
@@ -122,22 +132,31 @@ wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) 
   cl = TailcatClient$new(address)
   on.exit(cl$close(), add = TRUE)
   conn = cl$dial(wormhole_port, timeout = 60)
+
   header = conn$read_message(timeout = timeout, as = "text", max_bytes = 4096)
   if (is.null(header)) {
     cli::cli_abort("The sender closed the connection without sending anything.")
   }
   header = jsonlite::fromJSON(header)
   if (header$size > max_bytes) {
-    cli::cli_abort("The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows.")
+    cli::cli_abort(
+      "The sender offered {format_bytes(header$size)}, more than {.arg max_bytes} allows."
+    )
   }
   what = if (header$kind == "file") header$name else "an R object"
   cli::cli_inform("Receiving {what} ({format_bytes(header$size)}).")
+
+  # The announced size doubles as the limit, so the sender cannot send more.
   payload = conn$read_message(timeout = timeout, max_bytes = header$size)
   if (is.null(payload)) {
     cli::cli_abort("The sender closed the connection before sending the data.")
   }
+  value = if (header$kind == "file") {
+    wormhole_save(payload, header$name, dir)
+  } else {
+    unserialize(payload)
+  }
 
-  value = if (header$kind == "file") wormhole_save(payload, header$name, dir) else unserialize(payload)
   conn$write_message("ok", timeout = 60)
   conn$close_write()
   conn$close()
@@ -146,7 +165,10 @@ wormhole_receive = function(address, dir = ".", max_bytes = 1e9, timeout = 600) 
 }
 
 wormhole_save = function(payload, name, dir) {
-  if (!is.character(name) || length(name) != 1 || !nzchar(name) || name != basename(name) || name %in% c(".", "..")) {
+  # The name comes from the sender, so it must not be able to point elsewhere.
+  safe = is.character(name) && length(name) == 1 && nzchar(name) &&
+    name == basename(name) && !name %in% c(".", "..")
+  if (!safe) {
     cli::cli_abort("The sender offered an unsafe file name.")
   }
   path = file.path(dir, name)
@@ -171,7 +193,7 @@ The sender passes any R object to `wormhole_send()`, which waits until the trans
 library(rtailcat)
 wormhole_send(mtcars)
 #> Waiting for the receiver. Give them this address privately:
-#>   tcAbC...xYz
+#> tcAbC...xYz
 #> Sent 3.8 kB.
 ```
 
@@ -199,7 +221,7 @@ Files work the same way. Each call starts a new server with a new address, so an
 write.csv(mtcars, "mtcars.csv")
 wormhole_send_file("mtcars.csv")
 #> Waiting for the receiver. Give them this address privately:
-#>   tcDeF...uVw
+#> tcDeF...uVw
 #> Sent 1.8 kB.
 ```
 
@@ -233,13 +255,16 @@ remote_serve = function(keys, allowed_clients, max_bytes = 1e8) {
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(remote_port)
   address = tailcat_reveal(srv$address)
-  cli::cli_inform(c("Serving R for {length(allowed_clients)} client{?s} at this address:", " " = "{address}"))
+  cli::cli_inform(c(
+    "Serving R for {length(allowed_clients)} client{?s} at this address:",
+    "{address}"
+  ))
   repeat {
     conn = lst$accept()
     cli::cli_inform("Client connected.")
     tryCatch(
       remote_session(conn, max_bytes),
-      error = function(e) cli::cli_inform(c("The connection failed:", "x" = "{conditionMessage(e)}"))
+      error = \(e) cli::cli_inform(c("The connection failed:", "x" = "{conditionMessage(e)}"))
     )
     conn$close()
   }
@@ -248,11 +273,12 @@ remote_serve = function(keys, allowed_clients, max_bytes = 1e8) {
 remote_session = function(conn, max_bytes) {
   n = 0
   repeat {
+    # NULL means the client ended the stream between requests.
     request = conn$read_message(max_bytes = max_bytes)
     if (is.null(request)) {
       break
     }
-    reply = remote_run(unserialize(request))
+    reply = request |> unserialize() |> remote_run()
     conn$write_message(serialize(reply, NULL), timeout = 600)
     n = n + 1
   }
@@ -260,18 +286,15 @@ remote_session = function(conn, max_bytes) {
 }
 
 remote_run = function(expr) {
+  # A fresh environment per request, so requests cannot see each other's variables.
   env = new.env(parent = globalenv())
-  result = list(value = NULL, visible = FALSE, error = NULL)
-  result$output = utils::capture.output(
-    tryCatch(
-      {
-        res = withVisible(eval(expr, env))
-        result$value = res$value
-        result$visible = res$visible
-      },
-      error = function(e) result$error <<- conditionMessage(e)
+  output = utils::capture.output({
+    result = tryCatch(
+      withVisible(eval(expr, env)),
+      error = \(e) list(value = NULL, visible = FALSE, error = conditionMessage(e))
     )
-  )
+  })
+  result$output = output
   result
 }
 ```
@@ -282,10 +305,13 @@ On the client, `remote_eval()` sends an expression as written, and `remote_call(
 #| label: remote-def-client
 remote_connect = function(address, keys) {
   cl = TailcatClient$new(address, key = keys)
-  conn = tryCatch(cl$dial(remote_port, timeout = 60), error = function(e) {
-    cl$close()
-    stop(e)
-  })
+  conn = tryCatch(
+    cl$dial(remote_port, timeout = 60),
+    error = \(e) {
+      cl$close()
+      stop(e)
+    }
+  )
   structure(list(client = cl, conn = conn), class = "remote_session")
 }
 
@@ -294,7 +320,7 @@ remote_eval = function(session, expr, timeout = 600) {
 }
 
 remote_call = function(session, fun, ..., .timeout = 600) {
-  remote_request(session, as.call(c(list(fun), list(...))), .timeout)
+  remote_request(session, as.call(list(fun, ...)), .timeout)
 }
 
 remote_request = function(session, expr, timeout, call = rlang::caller_env()) {
@@ -308,12 +334,17 @@ remote_request = function(session, expr, timeout, call = rlang::caller_env()) {
     cat(result$output, sep = "\n")
   }
   if (!is.null(result$error)) {
-    cli::cli_abort(c("The code failed on the host.", "x" = "{result$error}"), class = "remote_error", call = call)
+    cli::cli_abort(
+      c("The code failed on the host.", "x" = "{result$error}"),
+      class = "remote_error",
+      call = call
+    )
   }
   if (result$visible) result$value else invisible(result$value)
 }
 
 remote_close = function(session) {
+  # Tell the host we are done, then give the shutdown time to reach it.
   session$conn$close_write()
   session$conn$close()
   session$client$close(drain = 5)
@@ -321,7 +352,8 @@ remote_close = function(session) {
 }
 
 print.remote_session = function(x, ...) {
-  cat(if (x$conn$is_closed) "<remote session, closed>" else "<remote session, connected>", "\n")
+  state = if (x$conn$is_closed) "closed" else "connected"
+  cat("<remote session, ", state, ">\n", sep = "")
   invisible(x)
 }
 ```
@@ -351,7 +383,7 @@ library(rtailcat)
 keys = tailcat_keygen("~/.config/remote/host.json")
 remote_serve(keys, allowed_clients = "nodekey:3f1c...9a0e")
 #> Serving R for 1 client at this address:
-#>   tcAbC...xYz
+#> tcAbC...xYz
 #> Client connected.
 #> Warning: cannot open file 'no-such-file.csv': No such file or directory
 #> Client disconnected after 5 requests.
@@ -413,16 +445,23 @@ progress_monitor = function(port = 9000L) {
   monitor = new.env(parent = emptyenv())
   monitor$server = srv
   monitor$events = list()
-  lst$serve(function(conn) {
-    conn$read_loop(function(datagram) progress_record(monitor, datagram), on_error = function(e) NULL)
+  # One flow per job. A flow that fails is closed; there is nothing to report.
+  lst$serve(\(conn) {
+    conn$read_loop(\(datagram) progress_record(monitor, datagram), on_error = \(e) NULL)
   })
   address = tailcat_reveal(srv$address)
-  cli::cli_inform(c("Collecting progress reports on UDP port {port}. Address for the jobs:", " " = "{address}"))
+  cli::cli_inform(c(
+    "Collecting progress reports on UDP port {port}. Address for the jobs:",
+    "{address}"
+  ))
   structure(monitor, class = "progress_monitor")
 }
 
 progress_record = function(monitor, datagram) {
-  event = tryCatch(jsonlite::fromJSON(rawToChar(datagram)), error = function(e) NULL)
+  event = tryCatch(
+    datagram |> rawToChar() |> jsonlite::fromJSON(),
+    error = \(e) NULL
+  )
   if (is.list(event)) {
     event$received = Sys.time()
     monitor$events[[length(monitor$events) + 1]] = event
@@ -435,8 +474,9 @@ progress_data = function(monitor) {
   if (length(events) == 0) {
     return(data.frame())
   }
-  cols = unique(unlist(lapply(events, names)))
-  rows = lapply(events, function(e) {
+  # Reports may carry different fields, so fill the missing ones with NA.
+  cols = events |> lapply(names) |> unlist() |> unique()
+  rows = lapply(events, \(e) {
     e[setdiff(cols, names(e))] = NA
     as.data.frame(e[cols])
   })
@@ -452,8 +492,9 @@ progress_stop = function(monitor) {
 }
 
 print.progress_monitor = function(x, ...) {
-  jobs = unique(vapply(x$events, function(e) e$job, character(1)))
-  cat("<progress monitor>", length(x$events), "reports from", length(jobs), "jobs\n")
+  n = length(x$events)
+  jobs = vapply(x$events, \(e) e$job, character(1)) |> unique() |> length()
+  cat(cli::pluralize("<progress monitor> {n} report{?s} from {jobs} job{?s}"), "\n", sep = "")
   invisible(x)
 }
 ```
@@ -477,17 +518,24 @@ progress_reporter = function(address, job, port = 9000L) {
 progress_report = function(reporter, ...) {
   reporter$seq = reporter$seq + 1L
   event = list(job = reporter$job, seq = reporter$seq, sent = as.numeric(Sys.time()), ...)
-  payload = charToRaw(jsonlite::toJSON(event, auto_unbox = TRUE, digits = NA))
-  if (length(payload) > tailcat_udp_max_payload()) {
-    cli::cli_warn("Report {reporter$seq} is {length(payload)} bytes, over the {tailcat_udp_max_payload()} bytes a datagram can hold, and was not sent.")
+  payload = event |>
+    jsonlite::toJSON(auto_unbox = TRUE, digits = NA) |>
+    charToRaw()
+  limit = tailcat_udp_max_payload()
+  if (length(payload) > limit) {
+    cli::cli_warn(
+      "Report {reporter$seq} is {length(payload)} bytes, over the {limit} bytes a datagram can hold, and was not sent."
+    )
     return(invisible(FALSE))
   }
+  # Monitoring must never slow down or stop the job, so a failed send is
+  # given up after a second and otherwise ignored.
   sent = tryCatch(
     {
       reporter$conn$write(payload, timeout = 1)
       TRUE
     },
-    error = function(e) FALSE
+    error = \(e) FALSE
   )
   invisible(sent)
 }
@@ -509,27 +557,33 @@ progress_app = function(monitor, x = "iter", y = "loss") {
     shiny::tableOutput("latest")
   )
   server = function(input, output, session) {
+    # Polling is enough: the monitor collects reports on its own.
     data = shiny::reactivePoll(
-      1000, session,
-      checkFunc = function() length(monitor$events),
-      valueFunc = function() progress_data(monitor)
+      1000,
+      session,
+      checkFunc = \() length(monitor$events),
+      valueFunc = \() progress_data(monitor)
     )
     output$plot = shiny::renderPlot({
       d = data()
       shiny::req(nrow(d) > 0, x %in% names(d), y %in% names(d))
       jobs = unique(d$job)
-      plot(d[[x]], d[[y]], type = "n", xlab = x, ylab = y)
+      graphics::plot(d[[x]], d[[y]], type = "n", xlab = x, ylab = y)
       for (i in seq_along(jobs)) {
         rows = d$job == jobs[i]
-        lines(d[[x]][rows], d[[y]][rows], col = i, lwd = 2)
+        graphics::lines(d[[x]][rows], d[[y]][rows], col = i, lwd = 2)
       }
-      legend("topright", legend = jobs, col = seq_along(jobs), lwd = 2, bty = "n")
+      graphics::legend("topright", legend = jobs, col = seq_along(jobs), lwd = 2, bty = "n")
     })
     output$latest = shiny::renderTable({
       d = data()
       shiny::req(nrow(d) > 0)
-      latest = d[!duplicated(d$job, fromLast = TRUE), setdiff(names(d), c("sent", "received")), drop = FALSE]
-      latest$age = paste(round(as.double(Sys.time() - d$received[!duplicated(d$job, fromLast = TRUE)], units = "secs")), "s")
+      last = !duplicated(d$job, fromLast = TRUE)
+      latest = d[last, setdiff(names(d), c("sent", "received")), drop = FALSE]
+      latest$age = difftime(Sys.time(), d$received[last], units = "secs") |>
+        as.double() |>
+        round() |>
+        paste("s")
       latest
     })
   }
@@ -547,7 +601,7 @@ Start the monitor on your laptop. It returns at once and keeps collecting in the
 library(rtailcat)
 m = progress_monitor()
 #> Collecting progress reports on UDP port 9000. Address for the jobs:
-#>   tcAbC...xYz
+#> tcAbC...xYz
 ```
 
 Give the job the address, for example through an environment variable, or a file only you can read written with `tailcat_address_write(m$server, path)` and read in the job with `tailcat_address_read(path)`, and call `progress_report()` wherever the job has something to say. Here a loop that shrinks a number stands in for the real work.
@@ -572,7 +626,7 @@ Back on the laptop the reports have arrived. Missing sequence numbers would show
 #| label: progress-laptop-data
 #| class-source: laptop
 m
-#> <progress monitor> 20 reports from 1 jobs
+#> <progress monitor> 20 reports from 1 job
 d = progress_data(m)
 tail(d[c("job", "seq", "iter", "loss")], 3)
 #>      job seq iter       loss

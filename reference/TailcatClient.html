@@ -7,7 +7,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 Blocking methods have an _async() counterpart that returns a promises::promise(); see TailcatServer for how asynchronous results are delivered, for timeouts (including timeout = 0), and for the error classes.
 The address is a secret; printing a client never shows it or the private key, and the client does not keep a copy of the address in R.
 Once a client is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, raises a tailcat_closed error; nothing is kept from before. A client restored from a saved session is closed, because handles do not survive serialization.
-A server with an allowlist (allowed_clients or TailcatServer$allow_client()) does not answer clients that are not on it, so for such a client $dial(), $ping(), and $disco_ping() fail with tailcat_timeout once their timeout runs out, rather than with a distinct error."></head><body>
+A server with an allowlist (allowed_clients or TailcatServer$allow_client()) does not answer clients that are not on it, so for such a client $dial(), $ping(), and $disco_ping() fail with tailcat_timeout once their timeout runs out, rather than with a distinct error."><meta property="og:image" content="https://rundel.github.io/rtailcat/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -39,8 +39,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 </nav><div class="container template-reference-topic">
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>Tailcat client</h1>
+      <img src="../logo.svg" class="logo" alt=""><h1>Tailcat client</h1>
       <small class="dont-index">Source: <a href="https://github.com/rundel/rtailcat/blob/main/R/client.R" class="external-link"><code>R/client.R</code></a></small>
       <div class="d-none name"><code>TailcatClient.Rd</code></div>
     </div>

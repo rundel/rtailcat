@@ -9,7 +9,7 @@ For TCP, reads may return fewer bytes than requested and $read() returns NULL at
 One read and one write may be in flight at the same time (for example a pending $read_async() while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several $write_async() calls send their data in call order and several $read_async() calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.
 $client or $server (the other is NULL) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.
 Once the connection, or the client or server that owns it, is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, $client, and $server, raises a tailcat_closed error; nothing is kept from before. Timeouts (including timeout = 0, a poll) and errors are described in TailcatServer.
-Because of an upstream tailcat bug, $info() (and so $local_address and $remote_address) fails with tailcat_failure, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called $close_write()). $print() and $format() avoid this by leaving the endpoints out once $close_write() has succeeded on the connection."></head><body>
+Because of an upstream tailcat bug, $info() (and so $local_address and $remote_address) fails with tailcat_failure, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called $close_write()). $print() and $format() avoid this by leaving the endpoints out once $close_write() has succeeded on the connection."><meta property="og:image" content="https://rundel.github.io/rtailcat/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -41,8 +41,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 </nav><div class="container template-reference-topic">
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>Tailcat connection</h1>
+      <img src="../logo.svg" class="logo" alt=""><h1>Tailcat connection</h1>
       <small class="dont-index">Source: <a href="https://github.com/rundel/rtailcat/blob/main/R/connection.R" class="external-link"><code>R/connection.R</code></a></small>
       <div class="d-none name"><code>TailcatConnection.Rd</code></div>
     </div>

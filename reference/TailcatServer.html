@@ -7,7 +7,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 Blocking methods have an _async() counterpart that returns a promises::promise() resolving with the same value, or rejecting with the same condition. Asynchronous results are delivered by the later event loop, so they only arrive while R is idle at the console, inside Shiny or httpuv, or while you call later::run_now(). The result goes to the loop that was current when the operation started, so an operation started inside later::with_temp_loop() or later::with_loop() completes while that loop runs. If that loop is destroyed before the operation completes, the result is delivered on the global loop instead (checked about once a second while such operations are pending). A pending asynchronous operation can be canceled with tailcat_cancel().
 Blocking methods can be interrupted (Ctrl-C or Esc), which cancels the operation. If the operation completes at the same moment, its result is returned and that interrupt is dropped rather than losing data such as bytes just read.
 The address and the private and pre-shared keys are secrets: anyone with the address can connect. Printing a server never shows them. $address and the address element of $info() are tailcat_secret strings, which print as &amp;lt;redacted&amp;gt; but otherwise behave like the full address (for example with writeLines() or as.character()). The server does not keep the address in an R field, so saving the server object (for example with saveRDS() or save.image()) does not write the address to disk. Handles do not survive serialization: a server restored from a saved session is closed.
-Once a server is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, raises a tailcat_closed error; nothing is kept from before."></head><body>
+Once a server is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, raises a tailcat_closed error; nothing is kept from before."><meta property="og:image" content="https://rundel.github.io/rtailcat/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -39,8 +39,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 </nav><div class="container template-reference-topic">
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>Tailcat server</h1>
+      <img src="../logo.svg" class="logo" alt=""><h1>Tailcat server</h1>
       <small class="dont-index">Source: <a href="https://github.com/rundel/rtailcat/blob/main/R/server.R" class="external-link"><code>R/server.R</code></a></small>
       <div class="d-none name"><code>TailcatServer.Rd</code></div>
     </div>

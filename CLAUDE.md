@@ -138,10 +138,12 @@ Key native-layer rules:
   omit what cannot be fetched. A connection’s `$format()` shows its
   local and remote endpoints (not secrets) only while it is open and
   `rtc_conn_write_shut()` is `FALSE`; that flag is set natively once
-  `close_write` succeeds, because `tc_info` after both directions are
-  shut down triggers the upstream panic below. `rtc_is_restored()` tells
-  a handle restored from a saved session (its external pointer is NULL)
-  from one that was closed, for the error message and the printed state.
+  `close_write` succeeds. The check was added because `tc_info` after
+  both directions were shut down used to panic upstream; that was fixed
+  in tailcat c14b171 and the check is kept by the owner’s decision.
+  `rtc_is_restored()` tells a handle restored from a saved session (its
+  external pointer is NULL) from one that was closed, for the error
+  message and the printed state.
 - Tailcat failures are returned as a list with class `rtc_error`
   (`status`, `message`, `bytes`), not thrown; `message` is tailcat’s
   text (possibly empty), and text the native layer makes up itself
@@ -392,31 +394,17 @@ R CMD build . && R CMD check --no-manual rtailcat_*.tar.gz
 
 ## Known issues
 
-Both issues below are upstream tailcat bugs, written up for upstream in
-`notes/upstream_issues.md` (git- and build-ignored). Each has a test
-that pins today’s behavior, so it fails once the pinned tailcat commit
-includes a fix.
-
-- UDP `read(n = 0)` fails with “bad buffer” (`tailcat_failure`) and
-  drops the datagram, because of an upstream tailcat bug in the C ABI
-  layer. `tailcat.h` does not define a zero-capacity UDP read, so
-  upstream may fix it by making it a no-op like TCP, by truncating to
-  zero bytes, or by rejecting the call without consuming the datagram.
-  TODO: once fixed, update the pinning test in
-  `tests/testthat/test-upstream-udp.R` to match (its comment gives all
-  three cases). By the owner’s decision there is no R-side workaround.
-- `tc_info` on a TCP connection whose two directions have both been shut
-  down (each side called `close_write`) panics inside tailcat with a nil
-  pointer dereference (`internal/capi/api.go` line 483: gVisor’s
-  `RemoteAddr()`/`LocalAddr()` return nil once the endpoint leaves the
-  connected state). libtailcat’s guard recovers it, prints the panic and
-  a goroutine stack to standard error, and returns `TC_FAILURE`. TODO:
-  once fixed, change the pinning test at the end of
-  `tests/testthat/test-upstream-tcp.R` (it runs the scenario in a child
-  process to keep the stack trace out of the test output) to expect
-  success, and consider dropping the `write_shut` check from the
-  connection’s `$format()`. No R-side workaround for `$info()` and the
-  fields; only printing avoids it.
+No upstream tailcat bugs are known at the pinned commit.
+`notes/upstream_issues.md` (git- and build-ignored) holds the write-ups
+of the two found so far, both fixed upstream: the zero-capacity UDP read
+(tailcat ed54cf9; `read(n = 0)` now consumes one datagram and returns no
+bytes) and the `tc_info` panic after both directions of a TCP connection
+were shut down (tailcat c14b171). The tests that pinned them (the
+zero-byte read in `tests/testthat/test-upstream-udp.R`, the last test of
+`tests/testthat/test-upstream-tcp.R`) now assert the fixed behavior. A
+new upstream bug gets a write-up there, an entry here, and a test that
+pins the behavior so it fails once the pinned commit includes a fix; by
+the owner’s decision there are no R-side workarounds.
 
 ## Conventions
 

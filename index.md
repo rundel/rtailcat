@@ -356,14 +356,9 @@ clients, give them stable keys
   [`?TailcatServer`](https://rundel.github.io/rtailcat/reference/TailcatServer.md).
 - One `$read()` returns at most 65536 bytes, whatever `n` is; loop, or
   use `$read_all()`, to read more.
-- Two bugs in the pinned tailcat version show through, and rtailcat does
-  not work around them. `$read(n = 0)` on a UDP connection fails and
-  discards the waiting datagram. `$info()`, `$local_address`, and
-  `$remote_address` on a TCP connection fail (and tailcat prints a Go
-  stack trace) once both sides have called `$close_write()`; read them
-  before shutting the connection down. Printing a connection shows its
-  endpoints only until `$close_write()` succeeds on it, so printing
-  never triggers this.
+- Printing a connection shows its endpoints only until `$close_write()`
+  succeeds on it; `$info()`, `$local_address`, and `$remote_address`
+  keep working until the connection is closed.
 
 ## Platform status
 

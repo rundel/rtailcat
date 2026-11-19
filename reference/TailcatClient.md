@@ -185,7 +185,7 @@ Measure the round-trip time to the server through the relay.
 The latency in seconds (a double). tailcat reports whole milliseconds,
 so the resolution is 0.001 and a ping faster than a millisecond reads as
 `0`. This differs from tailcat's C ABI
-([tailcat.h](https://github.com/tailscale/tailcat/blob/e00cdde6ff787f801361ff85ed085775c775d4c5/cmd/libtailcat/tailcat.h)),
+([tailcat.h](https://github.com/tailscale/tailcat/blob/c14b171db436062b86e95aa09e5792d1d1fd90f1/cmd/libtailcat/tailcat.h)),
 which returns the milliseconds; seconds match `$disco_ping()` and the
 timeouts.
 

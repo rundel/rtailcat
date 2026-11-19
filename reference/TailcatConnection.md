@@ -213,8 +213,8 @@ read returns data (or the end of stream) that has already arrived, and
 otherwise raises `tailcat_timeout` at once. A TCP read returns whatever
 has arrived, so with `as = "text"` a multibyte UTF-8 character can be
 split across two reads; for multibyte text use `$read_all()`, or read
-raw bytes and convert them once. On UDP, `n = 0` is not supported:
-because of an upstream tailcat bug it fails and the datagram is lost.
+raw bytes and convert them once. On UDP, `n = 0` consumes one datagram
+and returns no bytes; on TCP it returns at once without reading.
 
 #### Usage
 
@@ -807,9 +807,7 @@ The connection, invisibly.
 Format a summary, the lines that `$print()` shows. An open connection
 shows its local and remote endpoints on the tailcat network (not
 secrets); they are left out when the connection is closed, when tailcat
-cannot report them, and once `$close_write()` has succeeded on it,
-because asking tailcat after both sides have shut down their writes
-triggers an upstream bug that prints a Go stack trace.
+cannot report them, and once `$close_write()` has succeeded on it.
 
 #### Usage
 

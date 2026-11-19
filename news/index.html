@@ -66,11 +66,6 @@
 <code>TailcatClient$ping()</code> returns seconds rather than milliseconds, like <code>$disco_ping()</code> and the timeouts.</li>
 <li>Field names in the results of <code>$info()</code>, <code>$disco_ping()</code>, and <code><a href="../reference/tailcat_address_parse.html">tailcat_address_parse()</a></code> are snake_case (<code>relay_port</code>, <code>relay_region_id</code>, and so on) instead of tailcat’s JSON names; <code>tailcat_build_info()$raw</code> keeps Go’s own names.</li>
 </ul></div>
-<div class="section level3">
-<h3 id="known-upstream-issues-0-0-0-9000">Known upstream issues<a class="anchor" aria-label="anchor" href="#known-upstream-issues-0-0-0-9000"></a></h3>
-<ul><li>On a UDP connection <code>$read(n = 0)</code> fails with <code>tailcat_failure</code> and discards the waiting datagram.</li>
-<li>On a TCP connection whose two directions have both been shut down (both sides called <code>$close_write()</code>), <code>$info()</code>, <code>$local_address</code>, and <code>$remote_address</code> fail with <code>tailcat_failure</code> and tailcat prints a Go stack trace. Printing such a connection leaves the endpoints out instead.</li>
-</ul></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -52,7 +52,7 @@ seconds. `Inf` waits indefinitely. `timeout = 0` is a non-blocking poll:
 the call returns what is available right away (for example data already
 received, or a connection already waiting) and otherwise raises
 `tailcat_timeout` at once. This differs from tailcat's C ABI
-([tailcat.h](https://github.com/tailscale/tailcat/blob/e00cdde6ff787f801361ff85ed085775c775d4c5/cmd/libtailcat/tailcat.h)),
+([tailcat.h](https://github.com/tailscale/tailcat/blob/c14b171db436062b86e95aa09e5792d1d1fd90f1/cmd/libtailcat/tailcat.h)),
 where a zero timeout is an already expired deadline that fails without
 trying; rtailcat gives a poll a deadline of a few milliseconds instead.
 A poll waits for an operation started before it in the same direction of

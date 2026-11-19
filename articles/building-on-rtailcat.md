@@ -103,12 +103,17 @@ wormhole_send = function(x, timeout = 600) {
   # One transfer per address: nobody else can connect once the receiver has
   lst$close()
 
-  # The protocol: the serialized object, then "ok" from the receiver
+  # The protocol: the serialized object, then "ok" from the receiver. The reply is
+  # "ok", so a longer one is refused without reading it. A receiver that gives up
+  # ends the stream or resets it, so a failure also counts as no confirmation
   payload = serialize(x, NULL)
-  conn$write_message(payload, timeout = timeout)
-
-  # The reply is "ok", so a longer one is refused without reading it
-  reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
+  reply = tryCatch(
+    {
+      conn$write_message(payload, timeout = timeout)
+      conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
+    },
+    tailcat_failure = function(e) NULL
+  )
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
   }
@@ -129,7 +134,13 @@ Closing a server tears down its connections at once, so the receiver
 might not see the end of the stream cleanly. Closing the connection
 first and then calling `$close(drain = 5)` waits up to five seconds for
 that shutdown to reach the other side before closing the server. The
-receiver does the same with its client.
+receiver does the same with its client, and does it in
+[`on.exit()`](https://rdrr.io/r/base/on.exit.html) so that it also
+happens when the receiver stops with an error, such as an object over
+`max_bytes`. Without that the sender could wait out its whole timeout
+for a confirmation that is never coming. The sender in turn treats a
+stream that ends or fails before the `"ok"` arrives as a transfer that
+was not confirmed.
 
 The receiver dials the sender, reads the object, and only then confirms.
 `max_bytes` is checked against the length at the start of the message,
@@ -142,7 +153,17 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
   # Receives one R object from the sender at `address` and returns it
 
   cl = TailcatClient$new(address)
-  on.exit(cl$close(), add = TRUE)
+  conn = NULL
+
+  # However this function ends, close the connection and give that time to reach
+  # the sender, so a refused transfer does not leave the sender waiting
+  on.exit(
+    {
+      if (!is.null(conn)) conn$close()
+      cl$close(drain = 5)
+    },
+    add = TRUE
+  )
   conn = cl$dial(wormhole_port, timeout = 60)
 
   payload = conn$read_message(timeout = timeout, max_bytes = max_bytes)
@@ -157,8 +178,6 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
 
   conn$write_message("ok", timeout = 60)
   conn$close_write()
-  conn$close()
-  cl$close(drain = 5)
   value
 }
 ```

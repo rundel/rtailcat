@@ -23,9 +23,9 @@ tailcat_build_info()[c("abi_version", "go_version", "tailcat_version")]
 #> [1] 1
 #> 
 #> $go_version
-#> [1] "go1.27.2"
+#> [1] "go1.27.4"
 #> 
 #> $tailcat_version
-#> [1] "v0.7.1-0.20261105151022-e00cdde6ff78"
+#> [1] "v0.7.1-0.20261119042437-c14b171db436"
 #> 
 ```

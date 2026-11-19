@@ -171,7 +171,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-2">Returns<a class="anchor" aria-label="anchor" href="#returns-2"></a></h4>
-<p>The latency in seconds (a double). tailcat reports whole milliseconds, so the resolution is 0.001 and a ping faster than a millisecond reads as <code>0</code>. This differs from tailcat's C ABI (<a href="https://github.com/tailscale/tailcat/blob/e00cdde6ff787f801361ff85ed085775c775d4c5/cmd/libtailcat/tailcat.h" class="external-link">tailcat.h</a>), which returns the milliseconds; seconds match <code>$disco_ping()</code> and the timeouts.</p>
+<p>The latency in seconds (a double). tailcat reports whole milliseconds, so the resolution is 0.001 and a ping faster than a millisecond reads as <code>0</code>. This differs from tailcat's C ABI (<a href="https://github.com/tailscale/tailcat/blob/c14b171db436062b86e95aa09e5792d1d1fd90f1/cmd/libtailcat/tailcat.h" class="external-link">tailcat.h</a>), which returns the milliseconds; seconds match <code>$disco_ping()</code> and the timeouts.</p>
 </div>
 
 </div>

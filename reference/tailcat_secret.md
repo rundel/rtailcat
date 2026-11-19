@@ -106,7 +106,7 @@ keys$private_key
 str(keys)
 #> List of 3 (class tailcat_keys)
 #>  $ private_key  : <tailcat_secret> <redacted> 
-#>  $ public_key   : chr "nodekey:a61d0b88482ddc79660036e36d6f87e764d94876e0ca6e802d43be4388de487a" 
+#>  $ public_key   : chr "nodekey:ba1dc1554c53e3b36a207894dd4f6e4dd8ad3fa93bbcb34910d06c0282fdb673" 
 #>  $ preshared_key: <tailcat_secret> <redacted> 
 nchar(keys$private_key) > 0
 #> [1] TRUE

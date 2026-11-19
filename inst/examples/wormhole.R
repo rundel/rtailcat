@@ -27,12 +27,17 @@ wormhole_send = function(x, timeout = 600) {
   # One transfer per address: nobody else can connect once the receiver has
   lst$close()
 
-  # The protocol: the serialized object, then "ok" from the receiver
+  # The protocol: the serialized object, then "ok" from the receiver. The reply is
+  # "ok", so a longer one is refused without reading it. A receiver that gives up
+  # ends the stream or resets it, so a failure also counts as no confirmation
   payload = serialize(x, NULL)
-  conn$write_message(payload, timeout = timeout)
-
-  # The reply is "ok", so a longer one is refused without reading it
-  reply = conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
+  reply = tryCatch(
+    {
+      conn$write_message(payload, timeout = timeout)
+      conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
+    },
+    tailcat_failure = function(e) NULL
+  )
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
   }
@@ -46,7 +51,17 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
   # Receives one R object from the sender at `address` and returns it
 
   cl = TailcatClient$new(address)
-  on.exit(cl$close(), add = TRUE)
+  conn = NULL
+
+  # However this function ends, close the connection and give that time to reach
+  # the sender, so a refused transfer does not leave the sender waiting
+  on.exit(
+    {
+      if (!is.null(conn)) conn$close()
+      cl$close(drain = 5)
+    },
+    add = TRUE
+  )
   conn = cl$dial(wormhole_port, timeout = 60)
 
   payload = conn$read_message(timeout = timeout, max_bytes = max_bytes)
@@ -61,7 +76,5 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
 
   conn$write_message("ok", timeout = 60)
   conn$close_write()
-  conn$close()
-  cl$close(drain = 5)
   value
 }

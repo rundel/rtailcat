@@ -12,11 +12,11 @@ test_that("a TCP read with timeout = 0 returns data that has arrived, every time
   for (i in 1:50) {
     msg = paste0("chunk ", i)
     pair$client$write(msg)
-    expect_true(run_until(function() pair$server$readable(), 20))
+    expect_true(run_until(\() pair$server$readable(), 20))
     expect_identical(pair$server$read(timeout = 0, as = "text"), msg)
   }
   pair$client$write("async")
-  expect_true(run_until(function() pair$server$readable(), 20))
+  expect_true(run_until(\() pair$server$readable(), 20))
   expect_identical(wait_for(pair$server$read_async(timeout = 0, as = "text"), 10), "async")
   expect_identical(pair$server$read(n = 0, timeout = 0), raw(0))
 })
@@ -39,7 +39,7 @@ test_that("a poll with nothing to read raises tailcat_timeout at once and leaves
   pair$client$write("later")
   expect_identical(pair$server$read(timeout = 20, as = "text"), "later")
   pair$client$close_write()
-  expect_true(run_until(function() pair$server$readable(), 20))
+  expect_true(run_until(\() pair$server$readable(), 20))
   expect_null(pair$server$read(timeout = 0))
 })
 
@@ -70,8 +70,8 @@ test_that("read_all() with timeout = 0 returns a stream that has fully arrived",
 
   pair$client$write("whole stream")
   pair$client$close_write()
-  expect_true(run_until(function() pair$server$readable(), 20))
-  run_until(function() FALSE, 1)
+  expect_true(run_until(\() pair$server$readable(), 20))
+  run_until(\() FALSE, 1)
   expect_identical(pair$server$read_all(timeout = 0, as = "text"), "whole stream")
 })
 
@@ -86,27 +86,37 @@ test_that("writes, accepts, UDP reads, and info poll with timeout = 0", {
   expect_lt(elapsed(started), 1)
   cc = cl$dial(lst$port, timeout = 30)
   sc = NULL
-  expect_true(run_until(function() {
-    if (is.null(sc)) {
-      sc <<- tryCatch(lst$accept(timeout = 0), tailcat_timeout = function(e) NULL)
-    }
-    !is.null(sc)
-  }, 20))
+  expect_true(run_until(
+    function() {
+      if (is.null(sc)) {
+        sc <<- tryCatch(lst$accept(timeout = 0), tailcat_timeout = \(e) NULL)
+      }
+      !is.null(sc)
+    },
+    20
+  ))
   expect_s3_class(sc, "TailcatConnection")
   expect_identical(cc$write("x", timeout = 0), 1L)
   expect_identical(sc$read(timeout = 20, as = "text"), "x")
-  expect_named(sc$info(timeout = 0), c("local_address", "network", "remote_address"), ignore.order = TRUE)
+  expect_named(
+    sc$info(timeout = 0),
+    c("local_address", "network", "remote_address"),
+    ignore.order = TRUE
+  )
 
   ulst = srv$listen(0, network = "udp")
   upair = connect_pair(ulst, cl, ulst$port, network = "udp")
   expect_error(upair$server$read(timeout = 0), class = "tailcat_timeout")
   upair$client$write("datagram")
   got = NULL
-  expect_true(run_until(function() {
-    if (is.null(got)) {
-      got <<- tryCatch(upair$server$read(timeout = 0, as = "text"), tailcat_timeout = function(e) NULL)
-    }
-    !is.null(got)
-  }, 20))
+  expect_true(run_until(
+    function() {
+      if (is.null(got)) {
+        got <<- tryCatch(upair$server$read(timeout = 0, as = "text"), tailcat_timeout = \(e) NULL)
+      }
+      !is.null(got)
+    },
+    20
+  ))
   expect_identical(got, "datagram")
 })

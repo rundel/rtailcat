@@ -28,8 +28,14 @@ proxy_receive = function(conn, max_bytes) {
 }
 
 proxy_drop_headers = c(
-  "connection", "keep-alive", "transfer-encoding", "content-length", "host", "upgrade",
-  "accept-encoding", "content-encoding"
+  "connection",
+  "keep-alive",
+  "transfer-encoding",
+  "content-length",
+  "host",
+  "upgrade",
+  "accept-encoding",
+  "content-encoding"
 )
 
 proxy_clean_headers = function(lines) {

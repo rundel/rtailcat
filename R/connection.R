@@ -42,8 +42,13 @@ TailcatConnection = R6::R6Class(
     #' @param owner The owning [TailcatClient] or [TailcatServer].
     #' @param network Integer network code.
     initialize = function(handle, owner, network) {
-      if (!inherits(handle, "rtc_connection") || !is_tailcat_object(owner, c("TailcatClient", "TailcatServer"))) {
-        abort_invalid("Connections are created by {.code TailcatClient$dial()} or {.code TailcatListener$accept()}.")
+      if (
+        !inherits(handle, "rtc_connection") ||
+          !is_tailcat_object(owner, c("TailcatClient", "TailcatServer"))
+      ) {
+        abort_invalid(
+          "Connections are created by {.code TailcatClient$dial()} or {.code TailcatListener$accept()}."
+        )
       }
       private$handle = handle
       private$owner = owner
@@ -60,7 +65,10 @@ TailcatConnection = R6::R6Class(
       n = check_count(n)
       timeout = check_timeout(timeout)
       as = check_as(as)
-      convert_read(private$check(rtc_conn_read(private$handle, n, timeout, NULL), "read", timeout), as)
+      convert_read(
+        private$check(rtc_conn_read(private$handle, n, timeout, NULL), "read", timeout),
+        as
+      )
     },
 
     #' @description Asynchronous version of `$read()`.
@@ -73,7 +81,12 @@ TailcatConnection = R6::R6Class(
       timeout = check_timeout(timeout)
       as = check_as(as)
       call = error_call(rlang::current_env())
-      private$promise(function(cb) rtc_conn_read(private$handle, n, timeout, cb), function(x) convert_read(x, as, call), "read", timeout)
+      private$promise(
+        \(callback) rtc_conn_read(private$handle, n, timeout, callback),
+        \(x) convert_read(x, as, call),
+        "read",
+        timeout
+      )
     },
 
     #' @description Read until the peer ends the stream (TCP only). On timeout or error the condition's `bytes` field gives the number of bytes read before it; those bytes are discarded. With `timeout = 0` it returns only if the whole stream, including its end, has already arrived.
@@ -87,7 +100,10 @@ TailcatConnection = R6::R6Class(
       as = check_as(as)
       max_bytes = check_max_bytes(max_bytes)
       call = rlang::current_env()
-      convert_read(private$run(all_reader(max_bytes), "read to the end of the stream", timeout, call), as)
+      convert_read(
+        private$run(all_reader(max_bytes), "read to the end of the stream", timeout, call),
+        as
+      )
     },
 
     #' @description Asynchronous version of `$read_all()`. Canceling the promise with [tailcat_cancel()] ends the read in flight and starts no further reads.
@@ -101,7 +117,13 @@ TailcatConnection = R6::R6Class(
       as = check_as(as)
       max_bytes = check_max_bytes(max_bytes)
       call = error_call(rlang::current_env())
-      private$run_async(all_reader(max_bytes), "read to the end of the stream", timeout, call, function(x) convert_read(x, as, call))
+      private$run_async(
+        all_reader(max_bytes),
+        "read to the end of the stream",
+        timeout,
+        call,
+        \(x) convert_read(x, as, call)
+      )
     },
 
     #' @description Read exactly `n` bytes (TCP only), waiting for as many reads as that takes. Use it to read fixed-size fields of a binary protocol; for messages of varying length see `$read_message()`.
@@ -131,7 +153,7 @@ TailcatConnection = R6::R6Class(
       timeout = check_timeout(timeout)
       as = check_as(as)
       call = error_call(rlang::current_env())
-      private$run_async(exact_reader(n), exact_op(n), timeout, call, function(x) convert_read(x, as, call))
+      private$run_async(exact_reader(n), exact_op(n), timeout, call, \(x) convert_read(x, as, call))
     },
 
     #' @description Send `data` as one message (TCP only), for the peer to read with `$read_message()`. See the section on messages.
@@ -142,7 +164,11 @@ TailcatConnection = R6::R6Class(
       private$require_tcp("write_message")
       data = private$message_payload(data)
       timeout = check_timeout(timeout)
-      private$check(rtc_conn_write(private$handle, c(encode_length(length(data)), data), timeout, NULL), "write a message", timeout)
+      private$check(
+        rtc_conn_write(private$handle, c(encode_length(length(data)), data), timeout, NULL),
+        "write a message",
+        timeout
+      )
       invisible(length(data))
     },
 
@@ -155,7 +181,12 @@ TailcatConnection = R6::R6Class(
       data = private$message_payload(data)
       timeout = check_timeout(timeout)
       size = length(data)
-      private$promise(function(cb) rtc_conn_write(private$handle, c(encode_length(size), data), timeout, cb), function(x) size, "write a message", timeout)
+      private$promise(
+        \(callback) rtc_conn_write(private$handle, c(encode_length(size), data), timeout, callback),
+        \(x) size,
+        "write a message",
+        timeout
+      )
     },
 
     #' @description Read one message sent with `$write_message()` (TCP only). See the section on messages.
@@ -185,7 +216,9 @@ TailcatConnection = R6::R6Class(
       as = check_as(as)
       max_bytes = check_max_bytes(max_bytes)
       call = error_call(rlang::current_env())
-      private$run_async(message_reader(max_bytes), "read a message", timeout, call, function(x) convert_read(x, as, call))
+      private$run_async(message_reader(max_bytes), "read a message", timeout, call, \(x) {
+        convert_read(x, as, call)
+      })
     },
 
     #' @description Start an asynchronous read loop that calls `callback(data)` with every chunk (TCP), datagram (UDP), or message (with `messages = TRUE`) as it arrives, and returns immediately. See the section on read loops.
@@ -196,14 +229,19 @@ TailcatConnection = R6::R6Class(
     #' @param messages `FALSE` (the default) to deliver data as it arrives, or `TRUE` to deliver whole messages sent with `$write_message()` (TCP only).
     #' @param max_bytes The largest message to accept with `messages = TRUE`, as for `$read_message()`.
     #' @return The connection, invisibly. Calling it on a connection that is already in a read loop raises a `tailcat_failure` error (call `$stop_reading()` first), and on a closed connection a `tailcat_closed` error.
-    read_loop = function(callback, on_error = NULL, on_end = NULL, as = c("raw", "text"), messages = FALSE, max_bytes = Inf) {
+    read_loop = function(
+      callback,
+      on_error = NULL,
+      on_end = NULL,
+      as = c("raw", "text"),
+      messages = FALSE,
+      max_bytes = Inf
+    ) {
       check_function(callback, "callback")
       check_function(on_error, "on_error", null_ok = TRUE)
       check_function(on_end, "on_end", null_ok = TRUE)
       as = check_as(as)
-      if (!isTRUE(messages) && !isFALSE(messages)) {
-        abort_invalid("{.arg messages} must be {.code TRUE} or {.code FALSE}.")
-      }
+      check_flag(messages, "messages")
       max_bytes = check_max_bytes(max_bytes)
       if (messages) {
         private$require_tcp("read_loop(messages = TRUE)")
@@ -212,11 +250,23 @@ TailcatConnection = R6::R6Class(
         abort_closed("connection", private$handle)
       }
       if (private$reading) {
-        tailcat_abort(5L, headline = "This connection is already in a read loop.", bullets = c(i = "Call `$stop_reading()` first to read with a new callback."))
+        tailcat_abort(
+          status_failure,
+          headline = "This connection is already in a read loop.",
+          bullets = c(i = "Call `$stop_reading()` first to read with a new callback.")
+        )
       }
       private$reading = TRUE
-      private$read_gen = private$read_gen + 1L
-      loop = list(callback = callback, on_error = on_error, on_end = on_end, as = as, messages = messages, max_bytes = max_bytes, gen = private$read_gen)
+      private$read_generation = private$read_generation + 1L
+      loop = list(
+        callback = callback,
+        on_error = on_error,
+        on_end = on_end,
+        as = as,
+        messages = messages,
+        max_bytes = max_bytes,
+        generation = private$read_generation
+      )
       private$read_next(loop)
       invisible(self)
     },
@@ -226,7 +276,7 @@ TailcatConnection = R6::R6Class(
     stop_reading = function() {
       if (private$reading) {
         private$reading = FALSE
-        private$read_gen = private$read_gen + 1L
+        private$read_generation = private$read_generation + 1L
         if (!is.null(private$read_cancel)) {
           private$read_cancel()
           private$read_cancel = NULL
@@ -242,7 +292,11 @@ TailcatConnection = R6::R6Class(
     write = function(data, timeout = Inf) {
       data = private$payload(data)
       timeout = check_timeout(timeout)
-      invisible(private$check(rtc_conn_write(private$handle, data, timeout, NULL), "write", timeout))
+      invisible(private$check(
+        rtc_conn_write(private$handle, data, timeout, NULL),
+        "write",
+        timeout
+      ))
     },
 
     #' @description Asynchronous version of `$write()`.
@@ -252,7 +306,12 @@ TailcatConnection = R6::R6Class(
     write_async = function(data, timeout = Inf) {
       data = private$payload(data)
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_conn_write(private$handle, data, timeout, cb), identity, "write", timeout)
+      private$promise(
+        \(callback) rtc_conn_write(private$handle, data, timeout, callback),
+        identity,
+        "write",
+        timeout
+      )
     },
 
     #' @description Half-close a TCP connection: tell the peer there is nothing more to send, while still being able to read its reply.
@@ -261,7 +320,11 @@ TailcatConnection = R6::R6Class(
     close_write = function(timeout = 30) {
       private$require_tcp("close_write")
       timeout = check_timeout(timeout)
-      private$check(rtc_conn_close_write(private$handle, timeout, NULL), "close the connection for writing", timeout)
+      private$check(
+        rtc_conn_close_write(private$handle, timeout, NULL),
+        "close the connection for writing",
+        timeout
+      )
       invisible(self)
     },
 
@@ -271,7 +334,12 @@ TailcatConnection = R6::R6Class(
     close_write_async = function(timeout = 30) {
       private$require_tcp("close_write_async")
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_conn_close_write(private$handle, timeout, cb), function(x) self, "close the connection for writing", timeout)
+      private$promise(
+        \(callback) rtc_conn_close_write(private$handle, timeout, callback),
+        \(x) self,
+        "close the connection for writing",
+        timeout
+      )
     },
 
     #' @description Check without waiting whether a TCP read would return immediately (buffered data, end of stream, or a pending error). Intended for checking idle connections, not as a readiness loop.
@@ -286,7 +354,11 @@ TailcatConnection = R6::R6Class(
     #' @return A list with `local_address`, `remote_address`, and `network`.
     info = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      parse_info(private$check(rtc_info(private$handle, timeout, NULL), "get the connection's information", timeout))
+      parse_info(private$check(
+        rtc_info(private$handle, timeout, NULL),
+        "get the connection's information",
+        timeout
+      ))
     },
 
     #' @description Asynchronous version of `$info()`.
@@ -294,7 +366,12 @@ TailcatConnection = R6::R6Class(
     #' @return A promise resolving with the info list.
     info_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_info(private$handle, timeout, cb), parse_info, "get the connection's information", timeout)
+      private$promise(
+        \(callback) rtc_info(private$handle, timeout, callback),
+        parse_info,
+        "get the connection's information",
+        timeout
+      )
     },
 
     #' @description Close the connection. Pending reads and writes end with a `tailcat_closed` error. Closing twice is harmless.
@@ -309,17 +386,29 @@ TailcatConnection = R6::R6Class(
     #' @return A character vector.
     format = function(...) {
       closed = self$is_closed
-      side = if (inherits(private$owner, "TailcatClient")) "client (dialed)" else "server (accepted)"
+      side = if (inherits(private$owner, "TailcatClient")) {
+        "client (dialed)"
+      } else {
+        "server (accepted)"
+      }
       lines = c(
         "<TailcatConnection>",
-        paste0("  state:   ", state_label(closed, handle = private$handle), if (private$reading && !closed) " (reading)" else ""),
+        paste0(
+          "  state:   ",
+          state_label(closed, handle = private$handle),
+          if (private$reading && !closed) " (reading)" else ""
+        ),
         paste0("  network: ", network_name(private$network_code)),
         paste0("  side:    ", side)
       )
       if (!closed && !rtc_conn_write_shut(private$handle)) {
-        info = safely(parse_info(rtc_value(rtc_info(private$handle, 5, NULL))))
+        info = safely(parse_info(rtc_value(rtc_info(private$handle, format_timeout, NULL))))
         if (!is.null(info$local_address) && !is.null(info$remote_address)) {
-          lines = c(lines, paste0("  local:   ", info$local_address), paste0("  remote:  ", info$remote_address))
+          lines = c(
+            lines,
+            paste0("  local:   ", info$local_address),
+            paste0("  remote:  ", info$remote_address)
+          )
         }
       }
       lines
@@ -370,7 +459,7 @@ TailcatConnection = R6::R6Class(
     owner = NULL,
     network_code = NULL,
     reading = FALSE,
-    read_gen = 0L,
+    read_generation = 0L,
     read_cancel = NULL,
     context = function(op, timeout) {
       list(op = op, object = "connection", timeout = timeout, handle = private$handle)
@@ -382,7 +471,7 @@ TailcatConnection = R6::R6Class(
       reader_promise(private$handle, reader, timeout, private$context(op, timeout), call, transform)
     },
     read_next = function(loop) {
-      if (loop$gen != private$read_gen) {
+      if (loop$generation != private$read_generation) {
         return(invisible())
       }
       if (self$is_closed) {
@@ -392,14 +481,19 @@ TailcatConnection = R6::R6Class(
       }
       reader = if (loop$messages) message_reader(loop$max_bytes) else single_reader()
       op = if (loop$messages) "read a message" else "read"
-      private$read_cancel = start_reader(private$handle, reader, Inf, private$context(op, Inf), NULL,
-        done = function(value) private$read_value(value, loop),
-        fail = function(cond) private$read_failed(cond, loop)
+      private$read_cancel = start_reader(
+        private$handle,
+        reader,
+        Inf,
+        private$context(op, Inf),
+        NULL,
+        done = \(value) private$read_value(value, loop),
+        fail = \(cond) private$read_failed(cond, loop)
       )
       invisible()
     },
     read_value = function(value, loop) {
-      current = loop$gen == private$read_gen
+      current = loop$generation == private$read_generation
       if (is.null(value)) {
         if (current) {
           private$reading = FALSE
@@ -407,7 +501,10 @@ TailcatConnection = R6::R6Class(
         }
         if (!is.null(loop$on_end)) {
           tryCatch(loop$on_end(), error = function(e) {
-            deferred_warning(paste0("rtailcat: error in the on_end callback: ", conditionMessage(e)))
+            deferred_warning(paste0(
+              "rtailcat: error in the on_end callback: ",
+              conditionMessage(e)
+            ))
           })
         }
         return(invisible())
@@ -436,32 +533,57 @@ TailcatConnection = R6::R6Class(
     # A canceled or closed read ends the loop quietly. Other failures, and
     # errors from the callback (force), are reported and close the connection.
     read_failed = function(cond, loop, force = FALSE) {
-      if (!force && loop$gen != private$read_gen) {
+      if (!force && loop$generation != private$read_generation) {
         return(invisible())
       }
-      if (loop$gen == private$read_gen) {
+      if (loop$generation == private$read_generation) {
         private$reading = FALSE
         private$read_cancel = NULL
       }
       if (!force && (inherits(cond, c("tailcat_closed", "tailcat_canceled")) || self$is_closed)) {
         return(invisible())
       }
-      report_error(cond, NULL, if (is.null(loop$on_error)) NULL else function(cond, conn) loop$on_error(cond), "the read loop")
-      tryCatch(self$close(), error = function(e) NULL)
+      report_error(
+        cond,
+        NULL,
+        if (is.null(loop$on_error)) NULL else \(cond, conn) loop$on_error(cond),
+        "the read loop"
+      )
+      tryCatch(self$close(), error = \(e) NULL)
       invisible()
     },
     message_payload = function(data) {
-      data = as_payload(data, call = parent.frame())
+      data = as_payload(data, call = rlang::caller_env())
       if (length(data) > .Machine$integer.max) {
-        abort_invalid("A message holds at most {format_count(.Machine$integer.max)} bytes, not {format_count(length(data))}.", call = parent.frame())
+        abort_invalid(
+          "A message holds at most {format_count(.Machine$integer.max)} bytes, not {format_count(length(data))}.",
+          call = rlang::caller_env()
+        )
       }
       data
     },
     check = function(x, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_value(x, op = op, object = "connection", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_value(
+        x,
+        op = op,
+        object = "connection",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
     },
     promise = function(start, transform, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_promise(start, transform, op = op, object = "connection", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_promise(
+        start,
+        transform,
+        op = op,
+        object = "connection",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
     },
     read_only = function(field, value) {
       if (!missing(value)) {
@@ -470,49 +592,47 @@ TailcatConnection = R6::R6Class(
     },
     field_info = function(field, value) {
       private$read_only(field, value)
-      parse_info(private$check(rtc_info(private$handle, 30, NULL), "get the connection's information", 30, call = field_call("conn", field)))
+      parse_info(private$check(
+        rtc_info(private$handle, field_timeout, NULL),
+        "get the connection's information",
+        field_timeout,
+        call = field_call("conn", field)
+      ))
     },
     require_tcp = function(what) {
-      if (private$network_code != 1L) {
-        abort_invalid("{.code ${what}()} is only supported on TCP connections.", call = parent.frame())
+      if (private$network_code != network_tcp) {
+        abort_invalid(
+          "{.code ${what}()} is only supported on TCP connections.",
+          call = rlang::caller_env()
+        )
       }
     },
     payload = function(data) {
-      data = as_payload(data, call = parent.frame())
-      if (private$network_code == 2L && length(data) > udp_max_payload) {
-        abort_invalid("UDP datagrams are limited to {udp_max_payload} bytes, not {length(data)}.", call = parent.frame())
+      data = as_payload(data, call = rlang::caller_env())
+      if (private$network_code == network_udp && length(data) > udp_max_payload) {
+        abort_invalid(
+          "UDP datagrams are limited to {udp_max_payload} bytes, not {length(data)}.",
+          call = rlang::caller_env()
+        )
       }
       data
     }
   )
 )
 
-check_count = function(n, call = parent.frame()) {
-  if (!is.numeric(n) || length(n) != 1 || is.na(n) || n < 0 || n != trunc(n) || n > .Machine$integer.max) {
-    abort_invalid("{.arg n} must be a single non-negative whole number of bytes.", call = call)
-  }
-  as.double(n)
-}
-
-check_as = function(as, call = parent.frame()) {
-  match_choice(as, c("raw", "text"), "as", call = call)
-}
-
-check_max_bytes = function(max_bytes, call = parent.frame()) {
-  if (!is.numeric(max_bytes) || length(max_bytes) != 1 || is.na(max_bytes) || max_bytes < 0 || (is.finite(max_bytes) && max_bytes != trunc(max_bytes))) {
-    abort_invalid("{.arg max_bytes} must be a single non-negative whole number of bytes or {.code Inf}.", call = call)
-  }
-  as.double(max_bytes)
-}
-
 # Never reads past max_bytes + 1, so a stream that is too long is detected
 # while consuming as little of the rest as possible.
 read_all_chunk = function(max_bytes, total) {
-  min(65536, max_bytes - total + 1)
+  min(max_read_size, max_bytes - total + 1)
 }
 
 too_long_headline = function(max_bytes) {
-  paste0("The stream is longer than `max_bytes` (", format(max_bytes, scientific = FALSE, big.mark = ","), if (max_bytes == 1) " byte" else " bytes", ").")
+  paste0(
+    "The stream is longer than `max_bytes` (",
+    format_count(max_bytes),
+    if (max_bytes == 1) " byte" else " bytes",
+    ")."
+  )
 }
 
 too_long_bullets = c(i = "The bytes read were discarded; the connection stays open.")
@@ -525,12 +645,15 @@ byte_total = function(total) {
   if (total <= .Machine$integer.max) as.integer(total) else total
 }
 
-convert_read = function(x, as, call = parent.frame()) {
+convert_read = function(x, as, call = rlang::caller_env()) {
   if (is.null(x) || as == "raw") {
     return(x)
   }
   if (any(x == as.raw(0))) {
-    abort_invalid("The data read contains NUL bytes, which a string cannot hold; read it with {.code as = \"raw\"}.", call = call)
+    abort_invalid(
+      'The data read contains NUL bytes, which a string cannot hold; read it with {.code as = "raw"}.',
+      call = call
+    )
   }
   out = rawToChar(x)
   Encoding(out) = "UTF-8"

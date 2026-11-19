@@ -1,5 +1,6 @@
 test_that("a failed duplicate listen leaves the server started and its listeners working", {
-  # from internal/capi/e2e_test.go: TestE2EListenFailureKeepsServerStarted; listen_test.go: TestListen
+  # from internal/capi/e2e_test.go: TestE2EListenFailureKeepsServerStarted; listen_test.go:
+  # TestListen
   skip_relay()
   srv = relay_server()
   tcp = srv$listen(0)
@@ -29,7 +30,8 @@ test_that("a failed duplicate listen leaves the server started and its listeners
 })
 
 test_that("closing a listener keeps accepted connections open and frees the port for reuse", {
-  # from listen_test.go: TestListen (closing a listener); cmd/libtailcat/tailcat.h: tc_listener_accept
+  # from listen_test.go: TestListen (closing a listener); cmd/libtailcat/tailcat.h:
+  # tc_listener_accept
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0)
@@ -70,7 +72,7 @@ test_that("closing a client ends its dialed connections and the server sees end 
   expect_error(pair$client$write("x"), class = "tailcat_closed")
   # Racy by nature: close() does not drain, so the end of stream usually, but
   # not always, reaches the server before its read times out.
-  res = tryCatch(pair$server$read(timeout = 3), error = function(e) e)
+  res = tryCatch(pair$server$read(timeout = 3), error = \(e) e)
   expect_true(is.null(res) || inherits(res, "tailcat_timeout"))
   expect_false(pair$server$is_closed)
 })

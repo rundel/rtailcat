@@ -5,15 +5,23 @@
 local({
   mode = tolower(Sys.getenv("RTAILCAT_TEST_RELAY", "auto"))
   if (!mode %in% c("auto", "local", "public")) {
-    stop("RTAILCAT_TEST_RELAY must be \"auto\", \"local\", or \"public\", not \"", mode, "\"", call. = FALSE)
+    stop(
+      "RTAILCAT_TEST_RELAY must be \"auto\", \"local\", or \"public\", not \"",
+      mode,
+      "\"",
+      call. = FALSE
+    )
   }
-  say = function(...) message("rtailcat tests: ", ...)
+  say = \(...) message("rtailcat tests: ", ...)
 
   # testthat's own skip_on_cran() decides, so the gating matches the tests.
-  on_cran = tryCatch({
-    testthat::skip_on_cran()
-    FALSE
-  }, skip = function(e) TRUE)
+  on_cran = tryCatch(
+    {
+      testthat::skip_on_cran()
+      FALSE
+    },
+    skip = \(e) TRUE
+  )
   if (on_cran) {
     return(invisible())
   }
@@ -31,15 +39,25 @@ local({
     return(invisible())
   }
 
-  started = tryCatch(start_test_relay(), error = function(e) e)
+  started = tryCatch(start_test_relay(), error = \(e) e)
   if (inherits(started, "error")) {
     if (mode == "local") {
-      stop("rtailcat tests: RTAILCAT_TEST_RELAY=local but the local relay could not be started: ", conditionMessage(started), call. = FALSE)
+      stop(
+        "rtailcat tests: RTAILCAT_TEST_RELAY=local but the local relay could not be started: ",
+        conditionMessage(started),
+        call. = FALSE
+      )
     }
-    say("using the public relays, because the local relay could not be started: ", conditionMessage(started))
+    say(
+      "using the public relays, because the local relay could not be started: ",
+      conditionMessage(started)
+    )
     return(invisible())
   }
-  withr::local_envvar(RTAILCAT_TEST_REGION = started$region, .local_envir = testthat::teardown_env())
+  withr::local_envvar(
+    RTAILCAT_TEST_REGION = started$region,
+    .local_envir = testthat::teardown_env()
+  )
   test_relay$process = started$process
   test_relay$log = started$log
   say("using a local relay on 127.0.0.1 (", started$how, ")")

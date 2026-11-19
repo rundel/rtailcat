@@ -13,8 +13,8 @@ test_that("a huge n does not make the read allocate it, and one read returns at 
   payload = as.raw(sample(0:255, 200000, replace = TRUE))
   pair$client$write(payload)
   pair$client$close_write()
-  expect_true(run_until(function() pair$server$readable(), 20))
-  run_until(function() FALSE, 0.5)
+  expect_true(run_until(\() pair$server$readable(), 20))
+  run_until(\() FALSE, 0.5)
   first = pair$server$read(n = 1e6, timeout = 20)
   expect_lte(length(first), 65536L)
   rest = pair$server$read_all(timeout = 20)
@@ -29,15 +29,17 @@ test_that("a pending read_async() survives garbage collection of its connection 
   pair = connect_pair(lst, cl, lst$port)
 
   state = new.env()
-  promises::then(pair$server$read_async(timeout = 30, as = "text"), function(v) state$value = v, function(e) state$error = e)
+  promises::then(pair$server$read_async(timeout = 30, as = "text"), \(v) state$value = v, \(e) {
+    state$error = e
+  })
   writer = pair$client
   rm(pair)
   invisible(gc())
-  run_until(function() FALSE, 0.3)
+  run_until(\() FALSE, 0.3)
   expect_null(state$value)
   expect_null(state$error)
   writer$write("late data")
-  expect_true(run_until(function() !is.null(state$value) || !is.null(state$error), 20))
+  expect_true(run_until(\() !is.null(state$value) || !is.null(state$error), 20))
   expect_identical(state$value, "late data")
 })
 
@@ -51,9 +53,9 @@ test_that("canceling or closing in the middle of a large write reports the bytes
 
   pair = connect_pair(lst, cl, lst$port)
   pending = pair$client$write_async(data, timeout = 60)
-  run_until(function() FALSE, 0.5)
+  run_until(\() FALSE, 0.5)
   tailcat_cancel(pending)
-  cond = tryCatch(wait_for(pending, 10), error = function(e) e)
+  cond = tryCatch(wait_for(pending, 10), error = \(e) e)
   expect_s3_class(cond, "tailcat_canceled")
   expect_gt(as.double(cond$bytes), 0)
   expect_lt(as.double(cond$bytes), size)
@@ -62,9 +64,9 @@ test_that("canceling or closing in the middle of a large write reports the bytes
   pair = connect_pair(lst, cl, lst$port)
   pending = pair$client$write_async(data, timeout = 60)
   queued = promises::catch(pair$client$write_async("never sent", timeout = 60), identity)
-  run_until(function() FALSE, 0.5)
+  run_until(\() FALSE, 0.5)
   pair$client$close()
-  cond = tryCatch(wait_for(pending, 10), error = function(e) e)
+  cond = tryCatch(wait_for(pending, 10), error = \(e) e)
   expect_s3_class(cond, "tailcat_closed")
   expect_gt(as.double(cond$bytes), 0)
   expect_lt(as.double(cond$bytes), size)
@@ -90,12 +92,15 @@ test_that("a latin1 string is written as UTF-8", {
 
 test_that("an operation started inside a private later loop completes on that loop", {
   map_url = silent_map_url()
-  cl = TailcatClient$new(tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)), derp_map_url = map_url)
+  cl = TailcatClient$new(
+    tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)),
+    derp_map_url = map_url
+  )
   on.exit(cl$close())
   state = new.env()
   later::with_temp_loop({
     pending = cl$ping_async(timeout = 0)
-    promises::then(pending, function(v) state$value = v, function(e) state$error = e)
+    promises::then(pending, \(v) state$value = v, \(e) state$error = e)
     deadline = Sys.time() + 10
     while (is.null(state$error) && is.null(state$value) && Sys.time() < deadline) {
       later::run_now(0.05)
@@ -108,7 +113,7 @@ test_that("an operation started inside a private later loop completes on that lo
   cl$close()
   later::with_temp_loop({
     pending = cl$ping_async()
-    promises::then(pending, function(v) NULL, function(e) state$closed = e)
+    promises::then(pending, \(v) NULL, \(e) state$closed = e)
     deadline = Sys.time() + 10
     while (is.null(state$closed) && Sys.time() < deadline) {
       later::run_now(0.05)
@@ -124,10 +129,10 @@ test_that("an operation whose private loop is destroyed first completes on the g
   state = new.env()
   later::with_temp_loop({
     pending = lst$accept_async(timeout = 0.5)
-    promises::then(pending, function(v) state$value = v, function(e) state$error = e)
+    promises::then(pending, \(v) state$value = v, \(e) state$error = e)
   })
   expect_null(state$error)
-  expect_true(run_until(function() !is.null(state$error), 10))
+  expect_true(run_until(\() !is.null(state$error), 10))
   expect_s3_class(state$error, "tailcat_timeout")
 })
 
@@ -158,7 +163,10 @@ test_that("read_all() stops with tailcat_failure past max_bytes and leaves the r
   pair$client$close_write()
   for (max_bytes in list(-1, 1.5, NA, "1", c(1, 2))) {
     expect_error(pair$server$read_all(max_bytes = max_bytes), class = "tailcat_invalid_argument")
-    expect_error(pair$server$read_all_async(max_bytes = max_bytes), class = "tailcat_invalid_argument")
+    expect_error(
+      pair$server$read_all_async(max_bytes = max_bytes),
+      class = "tailcat_invalid_argument"
+    )
   }
   cond = tryCatch(pair$server$read_all(timeout = 20, max_bytes = 10), error = identity)
   expect_s3_class(cond, "tailcat_failure")
@@ -167,7 +175,10 @@ test_that("read_all() stops with tailcat_failure past max_bytes and leaves the r
   expect_identical(cond$bytes, 11L)
   expect_match(conditionMessage(cond), "^The stream is longer than `max_bytes` \\(10 bytes\\)\\.")
   expect_match(conditionMessage(cond), "connection stays open", fixed = TRUE)
-  expect_identical(deparse(conditionCall(cond)), "pair$server$read_all(timeout = 20, max_bytes = 10)")
+  expect_identical(
+    deparse(conditionCall(cond)),
+    "pair$server$read_all(timeout = 20, max_bytes = 10)"
+  )
   expect_false(pair$server$is_closed)
   expect_identical(pair$server$read_all(timeout = 20, as = "text"), "bcdef")
 
@@ -175,7 +186,10 @@ test_that("read_all() stops with tailcat_failure past max_bytes and leaves the r
   big = as.raw(rep_len(0:255, 200000))
   pair$client$write(big)
   pair$client$close_write()
-  cond = tryCatch(wait_for(pair$server$read_all_async(timeout = 30, max_bytes = 150000), 30), error = identity)
+  cond = tryCatch(
+    wait_for(pair$server$read_all_async(timeout = 30, max_bytes = 150000), 30),
+    error = identity
+  )
   expect_s3_class(cond, "tailcat_failure")
   expect_identical(cond$bytes, 150001L)
   expect_match(conditionMessage(cond), "(150,000 bytes)", fixed = TRUE)
@@ -184,7 +198,10 @@ test_that("read_all() stops with tailcat_failure past max_bytes and leaves the r
   pair = connect_pair(lst, cl, lst$port)
   pair$client$write("exactly")
   pair$client$close_write()
-  expect_identical(wait_for(pair$server$read_all_async(timeout = 20, max_bytes = 7, as = "text"), 20), "exactly")
+  expect_identical(
+    wait_for(pair$server$read_all_async(timeout = 20, max_bytes = 7, as = "text"), 20),
+    "exactly"
+  )
 
   pair = connect_pair(lst, cl, lst$port)
   pair$client$write("exactly")

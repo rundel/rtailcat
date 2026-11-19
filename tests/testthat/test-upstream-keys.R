@@ -1,12 +1,16 @@
 test_that("a server restarted with the same keys is reachable at its old address", {
-  # from cmd/libtailcat/tailcat.h: tc_key_generate (persist both keys); tailcat_test.go: TestAddrSeparateDiscoKey
+  # from cmd/libtailcat/tailcat.h: tc_key_generate (persist both keys); tailcat_test.go:
+  # TestAddrSeparateDiscoKey
   skip_relay()
   keys = tailcat_keygen()
   first = relay_server(key = keys)
   first$start()
   old = first$address
   meta = tailcat_address_parse(old)
-  expect_false(identical(sub("^[a-z]+:", "", meta$disco_public_key), sub("^[a-z]+:", "", meta$public_key)))
+  expect_false(identical(
+    sub("^[a-z]+:", "", meta$disco_public_key),
+    sub("^[a-z]+:", "", meta$public_key)
+  ))
   first$close()
 
   second = relay_server(key = keys)
@@ -17,7 +21,10 @@ test_that("a server restarted with the same keys is reachable at its old address
   new = second$address
   new_meta = tailcat_address_parse(new)
   expect_true(new_meta$has_preshared_key)
-  expect_identical(new_meta[c("public_key", "disco_public_key", "has_preshared_key")], meta[c("public_key", "disco_public_key", "has_preshared_key")])
+  expect_identical(
+    new_meta[c("public_key", "disco_public_key", "has_preshared_key")],
+    meta[c("public_key", "disco_public_key", "has_preshared_key")]
+  )
   if (identical(new_meta$regions, meta$regions)) {
     expect_identical(new, old)
   }

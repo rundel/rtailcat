@@ -77,7 +77,7 @@ test_that("timeouts raise tailcat_timeout and leave handles usable", {
   expect_error(wait_for(lst$accept_async(timeout = 0.2), 10), class = "tailcat_timeout")
 
   pair = connect_pair(lst, cl, 8081)
-  cond = tryCatch(pair$client$read(timeout = 0.2), error = function(e) e)
+  cond = tryCatch(pair$client$read(timeout = 0.2), error = \(e) e)
   expect_s3_class(cond, "tailcat_timeout")
   expect_identical(cond$status, 3L)
 
@@ -86,12 +86,12 @@ test_that("timeouts raise tailcat_timeout and leave handles usable", {
 
   pair$server$close_write()
   pair$client$write("partial")
-  cond = tryCatch(pair$server$read_all(timeout = 0.5), error = function(e) e)
+  cond = tryCatch(pair$server$read_all(timeout = 0.5), error = \(e) e)
   expect_s3_class(cond, "tailcat_timeout")
   expect_identical(as.double(cond$bytes), 7)
 
   pair$client$write("more")
-  cond = tryCatch(wait_for(pair$server$read_all_async(timeout = 0.5), 10), error = function(e) e)
+  cond = tryCatch(wait_for(pair$server$read_all_async(timeout = 0.5), 10), error = \(e) e)
   expect_s3_class(cond, "tailcat_timeout")
   expect_identical(as.double(cond$bytes), 4)
 })
@@ -129,7 +129,7 @@ test_that("closing the server closes its listeners and connections", {
   expect_true(pair$client$is_closed)
   # Racy by nature: the end of stream from the server's teardown may or may not
   # reach the client before the client itself is closed.
-  res = tryCatch(wait_for(pending_read, 10), error = function(e) e)
+  res = tryCatch(wait_for(pending_read, 10), error = \(e) e)
   expect_true(is.null(res) || inherits(res, "tailcat_closed"))
 })
 
@@ -142,21 +142,24 @@ test_that("serve() runs the handler for each connection and reports errors", {
   state = new.env()
   state$handled = 0L
   state$errors = list()
-  expect_identical(lst$serve(
-    function(conn) {
-      msg = conn$read_all(timeout = 20, as = "text")
-      if (msg == "fail") {
-        stop("handler failed on purpose")
+  expect_identical(
+    lst$serve(
+      function(conn) {
+        msg = conn$read_all(timeout = 20, as = "text")
+        if (msg == "fail") {
+          stop("handler failed on purpose")
+        }
+        conn$write(toupper(msg))
+        conn$close_write()
+        state$handled = state$handled + 1L
+      },
+      on_error = function(cond, conn) {
+        state$errors[[length(state$errors) + 1L]] = list(cond = cond, conn = conn)
       }
-      conn$write(toupper(msg))
-      conn$close_write()
-      state$handled = state$handled + 1L
-    },
-    on_error = function(cond, conn) {
-      state$errors[[length(state$errors) + 1L]] = list(cond = cond, conn = conn)
-    }
-  ), lst)
-  expect_error(lst$serve(function(conn) NULL), "already serving", class = "tailcat_failure")
+    ),
+    lst
+  )
+  expect_error(lst$serve(\(conn) NULL), "already serving", class = "tailcat_failure")
   expect_match(printed(lst), "serving", fixed = TRUE)
 
   for (word in c("one", "two")) {
@@ -164,7 +167,7 @@ test_that("serve() runs the handler for each connection and reports errors", {
     conn$write(word)
     conn$close_write()
     target = match(word, c("one", "two"))
-    expect_true(run_until(function() state$handled >= target, 30))
+    expect_true(run_until(\() state$handled >= target, 30))
     expect_identical(conn$read_all(timeout = 20, as = "text"), toupper(word))
     conn$close()
   }
@@ -172,7 +175,7 @@ test_that("serve() runs the handler for each connection and reports errors", {
   conn = cl$dial(8084, timeout = 30)
   conn$write("fail")
   conn$close_write()
-  expect_true(run_until(function() length(state$errors) == 1L, 30))
+  expect_true(run_until(\() length(state$errors) == 1L, 30))
   expect_match(conditionMessage(state$errors[[1]]$cond), "on purpose")
   expect_true(state$errors[[1]]$conn$is_closed)
   conn$close()
@@ -187,10 +190,10 @@ test_that("serve() without on_error turns handler errors into warnings", {
   srv = relay_server()
   lst = srv$listen(8085)
   cl = relay_client(srv$address)
-  lst$serve(function(conn) stop("no handler for you"))
+  lst$serve(\(conn) stop("no handler for you"))
   conn = cl$dial(8085, timeout = 30)
   expect_warning(
-    run_until(function() FALSE, 3),
+    run_until(\() FALSE, 3),
     "no handler for you"
   )
   conn$close()
@@ -259,7 +262,13 @@ test_that("address_resolve returns a usable address", {
   resolved = tailcat_address_resolve(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30)
   expect_type(resolved, "character")
   expect_identical(tailcat_address_parse(resolved)$public_key, srv$public_key)
-  expect_identical(wait_for(tailcat_address_resolve_async(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30), 40), resolved)
+  expect_identical(
+    wait_for(
+      tailcat_address_resolve_async(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30),
+      40
+    ),
+    resolved
+  )
 
   lst = srv$listen(8087)
   cl = relay_client(resolved)
@@ -278,9 +287,21 @@ test_that("print methods never reveal addresses or keys", {
   cl = relay_client(address, key = ckeys)
   pair = connect_pair(lst, cl, 8088)
 
-  secrets = c(address, keys$private_key, keys$preshared_key, ckeys$private_key, sub("^[a-z]+:", "", c(keys$private_key, keys$preshared_key, ckeys$private_key)))
+  secrets = c(
+    address,
+    keys$private_key,
+    keys$preshared_key,
+    ckeys$private_key,
+    sub("^[a-z]+:", "", c(keys$private_key, keys$preshared_key, ckeys$private_key))
+  )
   outputs = c(
-    printed(srv), printed(cl), printed(lst), printed(pair$client), printed(pair$server), printed(keys), printed(ckeys),
+    printed(srv),
+    printed(cl),
+    printed(lst),
+    printed(pair$client),
+    printed(pair$server),
+    printed(keys),
+    printed(ckeys),
     utils::capture.output(print(srv$info()$public_key))
   )
   for (secret in secrets) {

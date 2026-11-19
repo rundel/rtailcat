@@ -52,7 +52,10 @@ test_that("the readers report what they consumed", {
   expect_identical(message_reader(Inf)$feed(NULL), list(value = NULL))
   r = message_reader(Inf)
   r$feed(as.raw(0))
-  expect_identical(r$feed(NULL)$error$headline, "The stream ended in the middle of a message header.")
+  expect_identical(
+    r$feed(NULL)$error$headline,
+    "The stream ended in the middle of a message header."
+  )
 })
 
 test_that("read_exact() reads exactly n bytes across chunks and returns NULL at a clean end", {
@@ -69,7 +72,10 @@ test_that("read_exact() reads exactly n bytes across chunks and returns NULL at 
   expect_identical(pair$server$read_exact(150000, timeout = 20), big[1:150000])
   expect_identical(pair$server$read_exact(0, timeout = 20), raw(0))
   expect_identical(pair$server$read_exact(0, as = "text"), "")
-  expect_identical(wait_for(pair$server$read_exact_async(50000, timeout = 20), 20), big[150001:200000])
+  expect_identical(
+    wait_for(pair$server$read_exact_async(50000, timeout = 20), 20),
+    big[150001:200000]
+  )
   expect_identical(pair$server$read_exact(4, timeout = 20, as = "text"), "tail")
   expect_null(pair$server$read_exact(4, timeout = 20))
   expect_null(wait_for(pair$server$read_exact_async(4, timeout = 20), 20))
@@ -91,7 +97,7 @@ test_that("read_exact() reads exactly n bytes across chunks and returns NULL at 
   expect_match(conditionMessage(cond), "trying to read 5 bytes", fixed = TRUE)
 
   pair$client$write("defgh")
-  expect_true(run_until(function() pair$server$readable(), 20))
+  expect_true(run_until(\() pair$server$readable(), 20))
   expect_identical(pair$server$read_exact(5, timeout = 0, as = "text"), "defgh")
   expect_error(pair$server$read_exact(1, timeout = 0), class = "tailcat_timeout")
 
@@ -125,7 +131,10 @@ test_that("messages keep their boundaries in both directions", {
   expect_identical(pair$client$read_message(timeout = 20, as = "text"), "reply")
 
   pair$client$write_message(serialize(list(a = 1, b = "x"), NULL))
-  expect_identical(unserialize(pair$server$read_message(timeout = 20, max_bytes = 1e6)), list(a = 1, b = "x"))
+  expect_identical(
+    unserialize(pair$server$read_message(timeout = 20, max_bytes = 1e6)),
+    list(a = 1, b = "x")
+  )
 
   pair$client$write_message("wire")
   expect_identical(pair$server$read_exact(4, timeout = 20), as.raw(c(0, 0, 0, 4)))
@@ -147,12 +156,18 @@ test_that("read_message() refuses long messages before reading them and reports 
   cond = tryCatch(pair$server$read_message(timeout = 20, max_bytes = 10), error = identity)
   expect_s3_class(cond, "tailcat_failure")
   expect_identical(cond$bytes, 4L)
-  expect_match(conditionMessage(cond), "^The message is 20 bytes, more than `max_bytes` \\(10\\)\\.")
+  expect_match(
+    conditionMessage(cond),
+    "^The message is 20 bytes, more than `max_bytes` \\(10\\)\\."
+  )
   expect_match(conditionMessage(cond), "close the connection", fixed = TRUE)
   expect_identical(pair$server$read_exact(20, timeout = 20), as.raw(1:20))
 
   pair$client$write_message(as.raw(1:20))
-  cond = tryCatch(wait_for(pair$server$read_message_async(timeout = 20, max_bytes = 19), 20), error = identity)
+  cond = tryCatch(
+    wait_for(pair$server$read_message_async(timeout = 20, max_bytes = 19), 20),
+    error = identity
+  )
   expect_s3_class(cond, "tailcat_failure")
   expect_identical(cond$bytes, 4L)
 
@@ -174,7 +189,11 @@ test_that("read_message() refuses long messages before reading them and reports 
 
   pair = connect_pair(lst, cl, lst$port)
   pair$client$write_message(as.raw(c(0x61, 0, 0x62)))
-  expect_error(pair$server$read_message(timeout = 20, as = "text"), "NUL", class = "tailcat_invalid_argument")
+  expect_error(
+    pair$server$read_message(timeout = 20, as = "text"),
+    "NUL",
+    class = "tailcat_invalid_argument"
+  )
 })
 
 test_that("the framing methods are TCP only and check their arguments", {
@@ -198,6 +217,10 @@ test_that("the framing methods are TCP only and check their arguments", {
   lst = srv$listen(0)
   pair = connect_pair(lst, cl, lst$port)
   expect_error(pair$client$write_message(1), "data", class = "tailcat_invalid_argument")
-  expect_error(pair$client$read_message(max_bytes = -1), "max_bytes", class = "tailcat_invalid_argument")
+  expect_error(
+    pair$client$read_message(max_bytes = -1),
+    "max_bytes",
+    class = "tailcat_invalid_argument"
+  )
   expect_error(pair$client$read_message(as = "chr"), "as", class = "tailcat_invalid_argument")
 })

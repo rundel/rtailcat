@@ -94,7 +94,8 @@ test_that("an idle UDP flow ends on the server after udp_idle_timeout, unless ke
 })
 
 test_that("a zero-byte UDP read consumes one datagram and returns no bytes", {
-  # from cmd/libtailcat/tailcat.h: tc_conn_read (a zero-capacity UDP read consumes one datagram and succeeds with count zero)
+  # from cmd/libtailcat/tailcat.h: tc_conn_read (a zero-capacity UDP read consumes one datagram and
+  # succeeds with count zero)
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0, network = "udp")

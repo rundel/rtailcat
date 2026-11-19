@@ -37,7 +37,13 @@ TailcatClient = R6::R6Class(
       config$derp_map_url = check_derp_map_url(derp_map_url, call = call)
       result = rtc_client_new(to_json(config))
       if (inherits(result, "rtc_error")) {
-        rtc_abort(result, op = "create the client", object = "client", arg = config_arg(result$message, names(config)), call = call)
+        rtc_abort(
+          result,
+          op = "create the client",
+          object = "client",
+          arg = config_arg(result$message, names(config)),
+          call = call
+        )
       }
       private$handle = result
       invisible(self)
@@ -52,8 +58,13 @@ TailcatClient = R6::R6Class(
       port = check_port(port, allow_zero = FALSE)
       code = network_code(network)
       timeout = check_timeout(timeout)
-      h = private$check(rtc_client_dial(private$handle, port, code, timeout, NULL), paste0("dial port ", port), timeout, hint = unanswered)
-      TailcatConnection$new(h, self, code)
+      handle = private$check(
+        rtc_client_dial(private$handle, port, code, timeout, NULL),
+        paste0("dial port ", port),
+        timeout,
+        hint = unanswered_hint
+      )
+      TailcatConnection$new(handle, self, code)
     },
 
     #' @description Asynchronous version of `$dial()`.
@@ -66,9 +77,11 @@ TailcatClient = R6::R6Class(
       code = network_code(network)
       timeout = check_timeout(timeout)
       private$promise(
-        function(cb) rtc_client_dial(private$handle, port, code, timeout, cb),
-        function(h) TailcatConnection$new(h, self, code),
-        paste0("dial port ", port), timeout, hint = unanswered
+        \(callback) rtc_client_dial(private$handle, port, code, timeout, callback),
+        \(handle) TailcatConnection$new(handle, self, code),
+        paste0("dial port ", port),
+        timeout,
+        hint = unanswered_hint
       )
     },
 
@@ -77,7 +90,12 @@ TailcatClient = R6::R6Class(
     #' @return The latency in seconds (a double). tailcat reports whole milliseconds, so the resolution is 0.001 and a ping faster than a millisecond reads as `0`. This differs from tailcat's C ABI (`r tailcat_header_link()`), which returns the milliseconds; seconds match `$disco_ping()` and the timeouts.
     ping = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      ping_seconds(private$check(rtc_client_ping(private$handle, timeout, NULL), "ping the server", timeout, hint = unanswered))
+      ping_seconds(private$check(
+        rtc_client_ping(private$handle, timeout, NULL),
+        "ping the server",
+        timeout,
+        hint = unanswered_hint
+      ))
     },
 
     #' @description Asynchronous version of `$ping()`.
@@ -85,7 +103,13 @@ TailcatClient = R6::R6Class(
     #' @return A promise resolving with the latency in seconds.
     ping_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_client_ping(private$handle, timeout, cb), ping_seconds, "ping the server", timeout, hint = unanswered)
+      private$promise(
+        \(callback) rtc_client_ping(private$handle, timeout, callback),
+        ping_seconds,
+        "ping the server",
+        timeout,
+        hint = unanswered_hint
+      )
     },
 
     #' @description Send a discovery ping, which also triggers direct path discovery.
@@ -93,7 +117,12 @@ TailcatClient = R6::R6Class(
     #' @return A list with `latency` (seconds), `endpoint` (the direct path, or `""` when relayed), `relay_region_id`, and `relay_region_code` (the relay region the ping went through).
     disco_ping = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      parse_disco_ping(private$check(rtc_client_disco_ping(private$handle, timeout, NULL), "send a discovery ping", timeout, hint = unanswered))
+      parse_disco_ping(private$check(
+        rtc_client_disco_ping(private$handle, timeout, NULL),
+        "send a discovery ping",
+        timeout,
+        hint = unanswered_hint
+      ))
     },
 
     #' @description Asynchronous version of `$disco_ping()`.
@@ -101,7 +130,13 @@ TailcatClient = R6::R6Class(
     #' @return A promise resolving with the discovery ping list.
     disco_ping_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_client_disco_ping(private$handle, timeout, cb), parse_disco_ping, "send a discovery ping", timeout, hint = unanswered)
+      private$promise(
+        \(callback) rtc_client_disco_ping(private$handle, timeout, callback),
+        parse_disco_ping,
+        "send a discovery ping",
+        timeout,
+        hint = unanswered_hint
+      )
     },
 
     #' @description Information about the client.
@@ -109,7 +144,11 @@ TailcatClient = R6::R6Class(
     #' @return A list with `public_key`.
     info = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      parse_info(private$check(rtc_info(private$handle, timeout, NULL), "get the client's information", timeout))
+      parse_info(private$check(
+        rtc_info(private$handle, timeout, NULL),
+        "get the client's information",
+        timeout
+      ))
     },
 
     #' @description Asynchronous version of `$info()`.
@@ -117,7 +156,12 @@ TailcatClient = R6::R6Class(
     #' @return A promise resolving with the info list.
     info_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_info(private$handle, timeout, cb), parse_info, "get the client's information", timeout)
+      private$promise(
+        \(callback) rtc_info(private$handle, timeout, callback),
+        parse_info,
+        "get the client's information",
+        timeout
+      )
     },
 
     #' @description Wait for TCP shutdown traffic to finish. Call it after closing connections (or reaching end of stream) and before closing the client or exiting R, so the server sees a clean end of stream.
@@ -134,7 +178,12 @@ TailcatClient = R6::R6Class(
     #' @return A promise resolving with the client.
     drain_async = function(timeout = 5) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_drain(private$handle, timeout, cb), function(x) self, "drain the client", timeout)
+      private$promise(
+        \(callback) rtc_drain(private$handle, timeout, callback),
+        \(x) self,
+        "drain the client",
+        timeout
+      )
     },
 
     #' @description Close the client and all of its connections. Closing twice is harmless. Closing tears the client down immediately, so the server may not see the end of its streams until its own reads time out. To give the server a clean end of stream, close the connections first and pass `drain`, which waits for their shutdown traffic before closing (see `$drain()`).
@@ -158,7 +207,9 @@ TailcatClient = R6::R6Class(
       if (self$is_closed) {
         lines = c(lines, paste0("  state:      ", state_label(TRUE, handle = private$handle)))
       } else {
-        key = safely(parse_info(rtc_value(rtc_info(private$handle, 5, NULL)))$public_key)
+        key = safely(
+          parse_info(rtc_value(rtc_info(private$handle, format_timeout, NULL)))$public_key
+        )
         lines = c(
           lines,
           paste0("  state:      ", state_label(FALSE)),
@@ -179,37 +230,58 @@ TailcatClient = R6::R6Class(
   active = list(
     #' @field public_key The client's public key, for `TailcatServer$allow_client()`. It is fetched from tailcat on each access.
     public_key = function(value) {
+      private$read_only("public_key", value)
       call = field_call("cl", "public_key")
-      if (!missing(value)) {
-        abort_invalid("{.field public_key} is read-only.", call = call)
-      }
-      parse_info(private$check(rtc_info(private$handle, 30, NULL), "get the client's public key", 30, call = call))$public_key
+      parse_info(private$check(
+        rtc_info(private$handle, field_timeout, NULL),
+        "get the client's public key",
+        field_timeout,
+        call = call
+      ))$public_key
     },
     #' @field is_closed `TRUE` once the client has been closed.
     is_closed = function(value) {
-      if (!missing(value)) {
-        abort_invalid("{.field is_closed} is read-only.", call = field_call("cl", "is_closed"))
-      }
+      private$read_only("is_closed", value)
       rtc_is_closed(private$handle)
     }
   ),
   private = list(
     handle = NULL,
     check = function(x, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_value(x, op = op, object = "client", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_value(
+        x,
+        op = op,
+        object = "client",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
     },
     promise = function(start, transform, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_promise(start, transform, op = op, object = "client", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_promise(
+        start,
+        transform,
+        op = op,
+        object = "client",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
+    },
+    read_only = function(field, value) {
+      if (!missing(value)) {
+        abort_invalid("{.field {field}} is read-only.", call = field_call("cl", field))
+      }
     }
   )
 )
 
-unanswered = c(i = "A server that is offline, or that does not admit this client (see `allowed_clients`), does not answer; the call then runs out its timeout.")
+unanswered_hint = c(
+  i = "A server that is offline, or that does not admit this client (see `allowed_clients`), does not answer; the call then runs out its timeout."
+)
 
 ping_seconds = function(ms) {
   ms / 1000
-}
-
-parse_json = function(json) {
-  tailcat_fields(from_json(json))
 }

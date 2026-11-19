@@ -1,4 +1,6 @@
-`%||%` = function(x, y) if (is.null(x)) y else x
+`%||%` = function(x, y) {
+  if (is.null(x)) y else x
+}
 
 rtc_callback = function(body, on_error = NULL) {
   force(body)
@@ -8,11 +10,11 @@ rtc_callback = function(body, on_error = NULL) {
       body(result),
       error = function(e) {
         if (!is.null(on_error)) {
-          tryCatch(on_error(e), error = function(e2) NULL)
+          tryCatch(on_error(e), error = \(e2) NULL)
         }
       }
     )
-    invisible(NULL)
+    invisible()
   }
 }
 
@@ -20,7 +22,7 @@ rtc_promise = function(start, transform = identity, ..., call = rlang::caller_en
   call = error_call(call)
   context = list(...)
   handle = NULL
-  p = promises::promise(function(resolve, reject) {
+  promise = promises::promise(function(resolve, reject) {
     handle <<- start(rtc_callback(
       function(result) {
         if (inherits(result, "rtc_error")) {
@@ -32,7 +34,7 @@ rtc_promise = function(start, transform = identity, ..., call = rlang::caller_en
       on_error = reject
     ))
   })
-  with_canceler(p, function() rtc_cancel(handle))
+  with_canceler(promise, \() rtc_cancel(handle))
 }
 
 # The canceler is attached to the promise object itself, so promises derived
@@ -43,78 +45,13 @@ with_canceler = function(promise, canceler) {
 }
 
 canceled_error = function(bytes = 0L) {
-  structure(list(status = 4L, message = "", bytes = bytes), class = "rtc_error")
+  structure(list(status = status_canceled, message = "", bytes = bytes), class = "rtc_error")
 }
 
-check_timeout = function(timeout, arg = "timeout", call = parent.frame()) {
-  if (!is.numeric(timeout) || length(timeout) != 1 || is.na(timeout) || timeout < 0) {
-    abort_invalid("{.arg {arg}} must be a single non-negative number of seconds or {.code Inf}.", call = call)
-  }
-  as.double(timeout)
-}
+network_tcp = 1L
+network_udp = 2L
 
-check_port = function(port, allow_zero = TRUE, call = parent.frame()) {
-  lower = if (allow_zero) 0 else 1
-  if (!is.numeric(port) || length(port) != 1 || is.na(port) || port != trunc(port) || port < lower || port > 65535) {
-    abort_invalid("{.arg port} must be a single integer between {lower} and 65535.", call = call)
-  }
-  as.integer(port)
-}
-
-check_string = function(x, arg, null_ok = FALSE, trim = FALSE, call = parent.frame()) {
-  if (null_ok && is.null(x)) {
-    return(NULL)
-  }
-  x = reveal(x)
-  if (trim && is.character(x) && length(x) == 1 && !is.na(x)) {
-    x = trimws(x)
-  }
-  if (!is.character(x) || length(x) != 1 || is.na(x) || !nzchar(x)) {
-    abort_invalid("{.arg {arg}} must be a single non-empty string.", call = call)
-  }
-  enc2utf8(x)
-}
-
-# A NULL argument falls back to the rtailcat.derp_map_url option.
-check_derp_map_url = function(derp_map_url, call = parent.frame()) {
-  if (!is.null(derp_map_url)) {
-    return(check_string(derp_map_url, "derp_map_url", call = call))
-  }
-  value = getOption("rtailcat.derp_map_url")
-  if (is.null(value)) {
-    return(NULL)
-  }
-  if (!is.character(value) || length(value) != 1 || is.na(value) || !nzchar(value)) {
-    abort_invalid("The {.code rtailcat.derp_map_url} option must be a single non-empty string or {.code NULL}.", call = call)
-  }
-  enc2utf8(value)
-}
-
-check_address = function(address, call = parent.frame()) {
-  check_string(address, "address", trim = TRUE, call = call)
-}
-
-check_function = function(x, arg, null_ok = FALSE, call = parent.frame()) {
-  if ((null_ok && is.null(x)) || is.function(x)) {
-    return(x)
-  }
-  abort_invalid("{.arg {arg}} must be a function.", call = call)
-}
-
-# The rule for every choice argument (`network`, `as`): the untouched default
-# means its first value, otherwise exactly one of the values (no partial
-# matching, no case folding).
-match_choice = function(x, choices, arg, call = parent.frame()) {
-  if (identical(x, choices)) {
-    return(choices[[1]])
-  }
-  if (!is.character(x) || length(x) != 1 || is.na(x) || !(x %in% choices)) {
-    abort_invalid("{.arg {arg}} must be one of {.val {choices}}.", call = call)
-  }
-  x
-}
-
-network_code = function(network, call = parent.frame()) {
+network_code = function(network, call = rlang::caller_env()) {
   match(match_choice(network, c("tcp", "udp"), "network", call = call), c("tcp", "udp"))
 }
 
@@ -127,11 +64,17 @@ from_json = function(x) {
 }
 
 to_json = function(x) {
-  as.character(jsonlite::toJSON(x, auto_unbox = TRUE, digits = NA, null = "null", json_verbatim = TRUE))
+  as.character(jsonlite::toJSON(
+    x,
+    auto_unbox = TRUE,
+    digits = NA,
+    null = "null",
+    json_verbatim = TRUE
+  ))
 }
 
 endpoint_port = function(endpoint) {
-  if (is.null(endpoint) || !is.character(endpoint) || length(endpoint) != 1) {
+  if (!is_string(endpoint)) {
     return(NA_integer_)
   }
   suppressWarnings(as.integer(sub("^.*:", "", endpoint)))
@@ -148,7 +91,7 @@ parse_info = function(json) {
   info
 }
 
-as_payload = function(data, call = parent.frame()) {
+as_payload = function(data, call = rlang::caller_env()) {
   if (is.raw(data)) {
     return(data)
   }
@@ -173,14 +116,24 @@ state_label = function(closed, started = TRUE, handle = NULL) {
   if (closed && !is.null(handle) && rtc_is_restored(handle)) {
     return("closed (restored from a saved session)")
   }
-  if (closed) "closed" else if (started) "open" else "not started"
+  if (closed) {
+    "closed"
+  } else if (started) {
+    "open"
+  } else {
+    "not started"
+  }
 }
 
 safely = function(expr, default = NULL) {
-  tryCatch(expr, error = function(e) default)
+  tryCatch(expr, error = \(e) default)
 }
 
 udp_max_payload = 1232L
+
+# Seconds an active binding, and a format() method, wait for tailcat's answer.
+field_timeout = 30
+format_timeout = 5
 
 # Each operation in flight holds an OS thread, and each of those threads also
 # holds a Go runtime thread while it is inside tailcat. 1024 stays well below
@@ -193,8 +146,7 @@ max_operations_default = 1024
 # invalid.
 max_operations_option = function() {
   x = getOption("rtailcat.max_operations", max_operations_default)
-  valid = is.numeric(x) && length(x) == 1 && !is.na(x) && x >= 1 && (is.infinite(x) || x == trunc(x))
-  if (valid) as.double(x) else NA_real_
+  if (is_whole(x) && x >= 1) as.double(x) else NA_real_
 }
 
 is_tailcat_object = function(x, classes) {
@@ -206,4 +158,8 @@ parse_disco_ping = function(text) {
   x = parse_json(text)
   x$latency = as.double(x$latency)
   x
+}
+
+parse_json = function(json) {
+  tailcat_fields(from_json(json))
 }

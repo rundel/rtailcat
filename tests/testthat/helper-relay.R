@@ -28,8 +28,12 @@ start_test_relay = function(env = testthat::teardown_env()) {
     GOFLAGS = "-mod=readonly"
   )
   built = processx::run(
-    go, c("build", "-trimpath", "-o", bin, "github.com/tailscale/tailcat/internal/capitest"),
-    wd = module, env = go_env, timeout = 900, error_on_status = FALSE
+    go,
+    c("build", "-trimpath", "-o", bin, "github.com/tailscale/tailcat/internal/capitest"),
+    wd = module,
+    env = go_env,
+    timeout = 900,
+    error_on_status = FALSE
   )
   if (built$status != 0 || !file.exists(bin)) {
     stop("building the relay failed: ", last_line(built$stderr))
@@ -39,9 +43,13 @@ start_test_relay = function(env = testthat::teardown_env()) {
   cert = make_test_cert(dir, go, go_env)
 
   relay = processx::process$new(
-    bin, c("-cert", file.path(dir, "cert.pem"), "-key", file.path(dir, "key.pem")),
-    stdin = "|", stdout = "|", stderr = file.path(dir, "relay.log"),
-    cleanup = TRUE, cleanup_tree = TRUE
+    bin,
+    c("-cert", file.path(dir, "cert.pem"), "-key", file.path(dir, "key.pem")),
+    stdin = "|",
+    stdout = "|",
+    stderr = file.path(dir, "relay.log"),
+    cleanup = TRUE,
+    cleanup_tree = TRUE
   )
   withr::defer(stop_test_relay(relay), envir = env, priority = "first")
 
@@ -52,7 +60,10 @@ start_test_relay = function(env = testthat::teardown_env()) {
     line = paste(relay$read_output_lines(), collapse = "")
   }
   if (!nzchar(line)) {
-    stop("the relay did not start: ", last_line(paste(readLines(file.path(dir, "relay.log"), warn = FALSE), collapse = "\n")))
+    stop(
+      "the relay did not start: ",
+      last_line(paste(readLines(file.path(dir, "relay.log"), warn = FALSE), collapse = "\n"))
+    )
   }
   info = jsonlite::fromJSON(line, simplifyVector = FALSE)
   if (is.null(info$region)) {
@@ -60,7 +71,12 @@ start_test_relay = function(env = testthat::teardown_env()) {
   }
   list(
     region = as.character(jsonlite::toJSON(info$region, auto_unbox = TRUE, digits = NA)),
-    how = paste0("relay built in ", format(round(build_secs, 1), nsmall = 1), " s, certificate from ", cert),
+    how = paste0(
+      "relay built in ",
+      format(round(build_secs, 1), nsmall = 1),
+      " s, certificate from ",
+      cert
+    ),
     process = relay,
     log = file.path(dir, "relay.log")
   )
@@ -71,7 +87,7 @@ stop_test_relay = function(relay) {
     return(invisible())
   }
   # The relay exits when its stdin closes; kill it if that takes too long.
-  tryCatch(close(relay$get_input_connection()), error = function(e) NULL)
+  tryCatch(close(relay$get_input_connection()), error = \(e) NULL)
   relay$wait(3000)
   if (relay$is_alive()) {
     relay$kill()
@@ -83,7 +99,9 @@ find_go = function() {
   candidates = c(
     Sys.getenv("RTAILCAT_GO"),
     Sys.which("go"),
-    "/usr/local/go/bin/go", "/opt/homebrew/bin/go", "/usr/local/bin/go",
+    "/usr/local/go/bin/go",
+    "/opt/homebrew/bin/go",
+    "/usr/local/bin/go",
     file.path(Sys.getenv("HOME"), "go", "bin", "go")
   )
   candidates = candidates[nzchar(candidates) & file.exists(candidates)]
@@ -97,22 +115,42 @@ make_test_cert = function(dir, go, go_env) {
   if (nzchar(openssl)) {
     res = processx::run(
       openssl,
-      c("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2", "-subj", "/CN=127.0.0.1",
-        "-keyout", file.path(dir, "key.pem"), "-out", file.path(dir, "cert.pem")),
-      timeout = 60, error_on_status = FALSE
+      c(
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "2",
+        "-subj",
+        "/CN=127.0.0.1",
+        "-keyout",
+        file.path(dir, "key.pem"),
+        "-out",
+        file.path(dir, "cert.pem")
+      ),
+      timeout = 60,
+      error_on_status = FALSE
     )
     if (res$status == 0) {
       return("openssl")
     }
   }
-  goroot = trimws(processx::run(go, c("env", "GOROOT"), env = go_env, error_on_status = FALSE)$stdout)
+  goroot = trimws(
+    processx::run(go, c("env", "GOROOT"), env = go_env, error_on_status = FALSE)$stdout
+  )
   generator = file.path(goroot, "src", "crypto", "tls", "generate_cert.go")
   if (!file.exists(generator)) {
     stop("no openssl command and Go's generate_cert.go was not found to make a certificate")
   }
   res = processx::run(
-    go, c("run", generator, "--host", "127.0.0.1", "--duration", "48h"),
-    wd = dir, env = go_env, timeout = 300, error_on_status = FALSE
+    go,
+    c("run", generator, "--host", "127.0.0.1", "--duration", "48h"),
+    wd = dir,
+    env = go_env,
+    timeout = 300,
+    error_on_status = FALSE
   )
   if (res$status != 0) {
     stop("generating a certificate failed: ", last_line(res$stderr))

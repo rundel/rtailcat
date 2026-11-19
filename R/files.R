@@ -22,8 +22,13 @@ tailcat_keys_save = function(keys, path, overwrite = FALSE) {
   path = check_path(path)
   check_flag(overwrite, "overwrite")
   json = jsonlite::toJSON(
-    list(private_key = key$private_key, public_key = enc2utf8(keys$public_key), preshared_key = key$preshared_key),
-    auto_unbox = TRUE, pretty = TRUE
+    list(
+      private_key = key$private_key,
+      public_key = enc2utf8(keys$public_key),
+      preshared_key = key$preshared_key
+    ),
+    auto_unbox = TRUE,
+    pretty = TRUE
   )
   write_private(as.character(json), path, overwrite)
   invisible(path)
@@ -35,11 +40,9 @@ tailcat_keys_load = function(path) {
   path = check_path(path)
   text = read_private(path, "keys")
   fields = c("private_key", "public_key", "preshared_key")
-  keys = tryCatch(jsonlite::fromJSON(text, simplifyVector = FALSE), error = function(e) NULL)
-  valid = is.list(keys) && all(vapply(fields, function(f) {
-    x = keys[[f]]
-    is.character(x) && length(x) == 1 && !is.na(x) && nzchar(x)
-  }, logical(1)))
+  keys = tryCatch(jsonlite::fromJSON(text, simplifyVector = FALSE), error = \(e) NULL)
+  valid = is.list(keys) &&
+    all(vapply(fields, \(field) is_nonempty_string(keys[[field]]), logical(1)))
   if (!valid) {
     abort_invalid(c(
       "{.path {path}} is not a tailcat keys file.",
@@ -97,68 +100,61 @@ tailcat_address_read = function(path) {
   new_secret(lines)
 }
 
-new_keys = function(private_key, public_key, preshared_key) {
-  structure(
-    list(
-      private_key = new_secret(private_key),
-      public_key = public_key,
-      preshared_key = new_secret(preshared_key)
-    ),
-    class = "tailcat_keys"
-  )
-}
-
-check_path = function(path, call = parent.frame()) {
-  if (!is.character(path) || length(path) != 1 || is.na(path) || !nzchar(path)) {
-    abort_invalid("{.arg path} must be a single non-empty string.", call = call)
-  }
-  path.expand(path)
-}
-
-check_flag = function(x, arg, call = parent.frame()) {
-  if (!isTRUE(x) && !isFALSE(x)) {
-    abort_invalid("{.arg {arg}} must be {.code TRUE} or {.code FALSE}.", call = call)
-  }
-  x
-}
-
 # The file is written to a temporary name in the same folder under umask 077
 # and renamed into place, so it is never readable by others, not even while
 # it is being written, and a failed write leaves any old file intact.
-write_private = function(text, path, overwrite, call = parent.frame()) {
+write_private = function(text, path, overwrite, call = rlang::caller_env()) {
   if (file.exists(path) && !overwrite) {
-    abort_invalid(c("{.path {path}} already exists.", i = "Use {.code overwrite = TRUE} to replace it."), call = call)
+    abort_invalid(
+      c("{.path {path}} already exists.", i = "Use {.code overwrite = TRUE} to replace it."),
+      call = call
+    )
   }
   old = Sys.umask("077")
   on.exit(Sys.umask(old), add = TRUE)
   dir = dirname(path)
   if (!dir.exists(dir) && !dir.create(dir, recursive = TRUE, mode = "0700")) {
-    tailcat_abort(5L, headline = cli::format_inline("Could not create the folder {.path {dir}}."), call = call)
+    tailcat_abort(
+      status_failure,
+      headline = cli::format_inline("Could not create the folder {.path {dir}}."),
+      call = call
+    )
   }
   tmp = tempfile(".tailcat-", tmpdir = dir)
   on.exit(unlink(tmp), add = TRUE)
-  ok = tryCatch({
-    con = file(tmp, open = "wb")
-    tryCatch(writeLines(text, con, useBytes = TRUE), finally = close(con))
-    TRUE
-  }, error = function(e) FALSE)
+  ok = tryCatch(
+    {
+      con = file(tmp, open = "wb")
+      tryCatch(writeLines(text, con, useBytes = TRUE), finally = close(con))
+      TRUE
+    },
+    error = \(e) FALSE
+  )
   if (!ok || !file.rename(tmp, path)) {
-    tailcat_abort(5L, headline = cli::format_inline("Could not write {.path {path}}."), call = call)
+    tailcat_abort(
+      status_failure,
+      headline = cli::format_inline("Could not write {.path {path}}."),
+      call = call
+    )
   }
   invisible(path)
 }
 
-read_private = function(path, what, call = parent.frame()) {
+read_private = function(path, what, call = rlang::caller_env()) {
   if (!file.exists(path) || dir.exists(path)) {
     abort_invalid("The {what} file {.path {path}} does not exist.", call = call)
   }
   if (.Platform$OS.type != "windows") {
     mode = file.mode(path)
     if (!is.na(mode) && bitwAnd(as.integer(mode), strtoi("077", 8L)) != 0) {
-      cli::cli_warn(c(
-        "The {what} file {.path {path}} can be read by other users.",
-        i = "Restrict it with {.code Sys.chmod({deparse(path)}, \"600\")}."
-      ), class = "tailcat_warning", call = call)
+      cli::cli_warn(
+        c(
+          "The {what} file {.path {path}} can be read by other users.",
+          i = 'Restrict it with {.code Sys.chmod({deparse(path)}, "600")}.'
+        ),
+        class = "tailcat_warning",
+        call = call
+      )
     }
   }
   text = readChar(path, file.size(path), useBytes = TRUE)

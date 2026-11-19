@@ -35,16 +35,36 @@ test_that("tailcat_keygen(path) creates the keys once and then loads them", {
 
 test_that("saving and loading keys check their input", {
   dir = withr::local_tempdir()
-  expect_error(tailcat_keys_save(list(), file.path(dir, "k")), "tailcat_keys", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_keys_save(list(), file.path(dir, "k")),
+    "tailcat_keys",
+    class = "tailcat_invalid_argument"
+  )
   expect_error(tailcat_keys_save(tailcat_keygen(), NA), "path", class = "tailcat_invalid_argument")
-  expect_error(tailcat_keys_save(tailcat_keygen(), file.path(dir, "k"), overwrite = NA), "overwrite", class = "tailcat_invalid_argument")
-  expect_error(tailcat_keys_load(file.path(dir, "missing")), "does not exist", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_keys_save(tailcat_keygen(), file.path(dir, "k"), overwrite = NA),
+    "overwrite",
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    tailcat_keys_load(file.path(dir, "missing")),
+    "does not exist",
+    class = "tailcat_invalid_argument"
+  )
   bad = file.path(dir, "bad.json")
   writeLines('{"private_key": "x"}', bad)
   Sys.chmod(bad, "600")
-  expect_error(tailcat_keys_load(bad), "not a tailcat keys file", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_keys_load(bad),
+    "not a tailcat keys file",
+    class = "tailcat_invalid_argument"
+  )
   writeLines("not json", bad)
-  expect_error(tailcat_keys_load(bad), "not a tailcat keys file", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_keys_load(bad),
+    "not a tailcat keys file",
+    class = "tailcat_invalid_argument"
+  )
 })
 
 test_that("an address round-trips through an owner-only file", {
@@ -55,22 +75,42 @@ test_that("an address round-trips through an owner-only file", {
   read = tailcat_address_read(path)
   expect_s3_class(read, "tailcat_secret")
   expect_identical(tailcat_reveal(read), address)
-  expect_error(tailcat_address_write(address, path), "already exists", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_address_write(address, path),
+    "already exists",
+    class = "tailcat_invalid_argument"
+  )
   tailcat_address_write(address, path, overwrite = TRUE)
 
   writeLines(c("", paste0("  ", address, "  "), ""), path)
   expect_identical(tailcat_reveal(suppressWarnings(tailcat_address_read(path))), address)
   writeLines("tcnotanaddress", path)
-  expect_error(suppressWarnings(tailcat_address_read(path)), "valid tailcat address", class = "tailcat_invalid_argument")
+  expect_error(
+    suppressWarnings(tailcat_address_read(path)),
+    "valid tailcat address",
+    class = "tailcat_invalid_argument"
+  )
   writeLines(c(address, address), path)
-  expect_error(suppressWarnings(tailcat_address_read(path)), "exactly one address", class = "tailcat_invalid_argument")
-  expect_error(tailcat_address_write(NA_character_, path), "address", class = "tailcat_invalid_argument")
+  expect_error(
+    suppressWarnings(tailcat_address_read(path)),
+    "exactly one address",
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    tailcat_address_write(NA_character_, path),
+    "address",
+    class = "tailcat_invalid_argument"
+  )
 
   skip_on_os("windows")
   tailcat_address_write(address, path, overwrite = TRUE)
   expect_identical(as.character(file.mode(path)), "600")
   Sys.chmod(path, "640")
-  expect_warning(tailcat_address_read(path), "can be read by other users", class = "tailcat_warning")
+  expect_warning(
+    tailcat_address_read(path),
+    "can be read by other users",
+    class = "tailcat_warning"
+  )
 })
 
 test_that("tailcat_address_write() takes a started server", {
@@ -96,18 +136,22 @@ test_that("tailcat_udp_max_payload() gives the datagram limit", {
 })
 
 test_that("tailcat_wait() returns a promise's value or signals its rejection", {
-  p = promises::promise(function(resolve, reject) later::later(function() resolve(42), 0.1))
+  p = promises::promise(\(resolve, reject) later::later(\() resolve(42), 0.1))
   expect_identical(tailcat_wait(p, timeout = 5), 42)
   expect_identical(tailcat_wait(promises::promise_resolve("now"), timeout = 0), "now")
 
-  p = promises::promise(function(resolve, reject) later::later(function() reject(simpleError("nope")), 0.1))
+  p = promises::promise(\(resolve, reject) later::later(\() reject(simpleError("nope")), 0.1))
   expect_error(tailcat_wait(p, timeout = 5), "nope")
   expect_error(tailcat_wait(promises::promise_reject("plain"), timeout = 5), "plain")
 
-  never = promises::promise(function(resolve, reject) NULL)
+  never = promises::promise(\(resolve, reject) NULL)
   cond = tryCatch(tailcat_wait(never, timeout = 0.2), error = identity)
   expect_s3_class(cond, "tailcat_timeout")
-  expect_match(conditionMessage(cond), "Timed out after 0.2 seconds trying to wait for the promise.", fixed = TRUE)
+  expect_match(
+    conditionMessage(cond),
+    "Timed out after 0.2 seconds trying to wait for the promise.",
+    fixed = TRUE
+  )
   expect_error(tailcat_wait(never, timeout = 0), class = "tailcat_timeout")
 
   expect_error(tailcat_wait(1), "promise", class = "tailcat_invalid_argument")
@@ -117,15 +161,15 @@ test_that("tailcat_wait() returns a promise's value or signals its rejection", {
 test_that("tailcat_run() runs the event loop until a condition holds or the timeout runs out", {
   state = new.env()
   state$n = 0
-  later::later(function() state$n = 1, 0.1)
-  expect_true(tailcat_run(function() state$n == 1, timeout = 5))
+  later::later(\() state$n = 1, 0.1)
+  expect_true(tailcat_run(\() state$n == 1, timeout = 5))
   expect_identical(state$n, 1)
 
   start = Sys.time()
   expect_false(tailcat_run(timeout = 0.3))
   expect_gte(as.double(Sys.time() - start, units = "secs"), 0.25)
-  expect_false(tailcat_run(function() NA, timeout = 0))
-  expect_invisible(tailcat_run(function() TRUE))
+  expect_false(tailcat_run(\() NA, timeout = 0))
+  expect_invisible(tailcat_run(\() TRUE))
 
   expect_error(tailcat_run(1), "until", class = "tailcat_invalid_argument")
 })
@@ -134,12 +178,24 @@ test_that("invalid relay options are reported as options", {
   withr::local_options(rtailcat.region = 1)
   expect_error(TailcatServer$new(), "rtailcat.region", class = "tailcat_invalid_argument")
   withr::local_options(rtailcat.region = "{not json")
-  expect_error(TailcatServer$new(), "rtailcat.region.*not valid JSON", class = "tailcat_invalid_argument")
+  expect_error(
+    TailcatServer$new(),
+    "rtailcat.region.*not valid JSON",
+    class = "tailcat_invalid_argument"
+  )
   withr::local_options(rtailcat.region = NULL, rtailcat.derp_map_url = c("a", "b"))
   address = tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10))
-  expect_error(TailcatClient$new(address), "rtailcat.derp_map_url", class = "tailcat_invalid_argument")
+  expect_error(
+    TailcatClient$new(address),
+    "rtailcat.derp_map_url",
+    class = "tailcat_invalid_argument"
+  )
   expect_error(TailcatServer$new(), "rtailcat.derp_map_url", class = "tailcat_invalid_argument")
-  expect_error(tailcat_address_resolve(address), "rtailcat.derp_map_url", class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_address_resolve(address),
+    "rtailcat.derp_map_url",
+    class = "tailcat_invalid_argument"
+  )
   cl = TailcatClient$new(address, derp_map_url = "https://example.invalid/map.json")
   expect_false(cl$is_closed)
   cl$close()
@@ -148,11 +204,17 @@ test_that("invalid relay options are reported as options", {
 test_that("the relay options configure servers and clients created without relay arguments", {
   skip_relay()
   skip_if(is.null(relay_region()), "the public relays need no options")
-  withr::local_options(rtailcat.region = relay_region(), rtailcat.derp_map_url = relay_derp_map_url())
+  withr::local_options(
+    rtailcat.region = relay_region(),
+    rtailcat.derp_map_url = relay_derp_map_url()
+  )
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)
   lst = srv$listen(0)
-  expect_identical(tailcat_address_parse(srv$address)$regions[[1]]$nodes[[1]]$host_name, "127.0.0.1")
+  expect_identical(
+    tailcat_address_parse(srv$address)$regions[[1]]$nodes[[1]]$host_name,
+    "127.0.0.1"
+  )
   cl = TailcatClient$new(srv$address)
   on.exit(cl$close(), add = TRUE)
   pair = connect_pair(lst, cl, lst$port)

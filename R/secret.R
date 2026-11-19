@@ -70,16 +70,19 @@ reveal = function(x) {
 #' @export
 tailcat_reveal = function(x) {
   if (!is.character(x)) {
-    abort_invalid("{.arg x} must be a {.cls tailcat_secret} or a character vector, not {.obj_type_friendly {x}}.")
+    abort_invalid(
+      "{.arg x} must be a {.cls tailcat_secret} or a character vector, not {.obj_type_friendly {x}}."
+    )
   }
   as.character(reveal(x))
 }
 
-# A plain list cannot redact under format() before R 4.6.0, so the one info list that holds a secret gets a class.
+# A plain list cannot redact under format() before R 4.6.0, so the one info
+# list that holds a secret gets a class.
 #' @rdname tailcat_secret
 #' @export
 format.tailcat_info = function(x, ...) {
-  vapply(unclass(x), function(element) paste(format(element, ...), collapse = ", "), character(1))
+  vapply(unclass(x), \(element) paste(format(element, ...), collapse = ", "), character(1))
 }
 
 #' @rdname tailcat_secret

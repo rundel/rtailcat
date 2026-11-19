@@ -1,5 +1,5 @@
 wait_close_write = function(conn, n) {
-  promises::then(conn$close_write_async(timeout = 30), function(x) n)
+  promises::then(conn$close_write_async(timeout = 30), \(x) n)
 }
 
 test_that("data written before a full close() reaches the peer, followed by end of stream", {
@@ -40,7 +40,8 @@ test_that("a pending async read is ended by close() and the handle stays closed"
 })
 
 test_that("a read queued behind a pending read times out, and the pending read still gets the data", {
-  # from internal/capi/api_test.go: TestDeadlineIncludesWaitingForAnotherRead, TestCancelledReadDoesNotPoisonNextRead
+  # from internal/capi/api_test.go: TestDeadlineIncludesWaitingForAnotherRead,
+  # TestCancelledReadDoesNotPoisonNextRead
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0)
@@ -60,7 +61,8 @@ test_that("a read queued behind a pending read times out, and the pending read s
 })
 
 test_that("readable() never consumes buffered data and turns TRUE at end of stream", {
-  # from internal/capi/api_test.go: TestReadabilityDoesNotConsumePayload, TestReadabilityReportsPeerEOF
+  # from internal/capi/api_test.go: TestReadabilityDoesNotConsumePayload,
+  # TestReadabilityReportsPeerEOF
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0)
@@ -69,13 +71,13 @@ test_that("readable() never consumes buffered data and turns TRUE at end of stre
 
   expect_false(pair$client$readable())
   pair$server$write("hello")
-  expect_true(run_until(function() pair$client$readable(), 20))
+  expect_true(run_until(\() pair$client$readable(), 20))
   expect_true(pair$client$readable())
   expect_identical(rawToChar(pair$client$read(n = 5, timeout = 5)), "hello")
   expect_false(pair$client$readable())
 
   pair$server$close_write()
-  expect_true(run_until(function() pair$client$readable(), 20))
+  expect_true(run_until(\() pair$client$readable(), 20))
   expect_null(pair$client$read(timeout = 5))
   expect_true(pair$client$readable())
 })
@@ -91,13 +93,14 @@ test_that("zero-byte TCP reads and writes succeed without signaling end of strea
   expect_identical(pair$client$read(n = 0, timeout = 1), raw(0))
   expect_identical(pair$client$write(raw(0)), 0L)
   pair$server$close_write()
-  expect_true(run_until(function() pair$client$readable(), 20))
+  expect_true(run_until(\() pair$client$readable(), 20))
   expect_identical(pair$client$read(n = 0, timeout = 1), raw(0))
   expect_null(pair$client$read(timeout = 5))
 })
 
 test_that("large payloads cross in both directions at once without corruption", {
-  # from cmd/libtailcat/tailcat.h: one read plus one write may run concurrently (no upstream bulk-transfer test)
+  # from cmd/libtailcat/tailcat.h: one read plus one write may run concurrently (no upstream
+  # bulk-transfer test)
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0)
@@ -108,8 +111,12 @@ test_that("large payloads cross in both directions at once without corruption", 
   down = as.raw(sample(0:255, 1e6, replace = TRUE))
   got_up = pair$server$read_all_async(timeout = 60)
   got_down = pair$client$read_all_async(timeout = 60)
-  sent_up = promises::then(pair$client$write_async(up, timeout = 60), function(n) wait_close_write(pair$client, n))
-  sent_down = promises::then(pair$server$write_async(down, timeout = 60), function(n) wait_close_write(pair$server, n))
+  sent_up = promises::then(pair$client$write_async(up, timeout = 60), \(n) {
+    wait_close_write(pair$client, n)
+  })
+  sent_down = promises::then(pair$server$write_async(down, timeout = 60), \(n) {
+    wait_close_write(pair$server, n)
+  })
   expect_equal(wait_for(sent_up, 70), length(up))
   expect_equal(wait_for(sent_down, 70), length(down))
   expect_identical(wait_for(got_up, 70), up)
@@ -125,15 +132,19 @@ test_that("concurrent connections from one or more clients keep their streams se
   cl1 = relay_client(srv$address)
   cl2 = relay_client(srv$address)
 
-  pairs = list(connect_pair(lst, cl1, port), connect_pair(lst, cl1, port), connect_pair(lst, cl2, port))
-  locals = vapply(pairs, function(p) p$client$local_address, "")
+  pairs = list(
+    connect_pair(lst, cl1, port),
+    connect_pair(lst, cl1, port),
+    connect_pair(lst, cl2, port)
+  )
+  locals = vapply(pairs, \(p) p$client$local_address, "")
   expect_identical(anyDuplicated(locals), 0L)
   for (p in pairs) {
     expect_identical(p$server$remote_address, p$client$local_address)
   }
 
   msgs = c("alpha", "bravo", "charlie")
-  reads = lapply(pairs, function(p) p$server$read_all_async(timeout = 30))
+  reads = lapply(pairs, \(p) p$server$read_all_async(timeout = 30))
   for (i in rev(seq_along(pairs))) {
     pairs[[i]]$client$write(msgs[[i]])
   }
@@ -141,7 +152,7 @@ test_that("concurrent connections from one or more clients keep their streams se
     pairs[[i]]$client$write(toupper(msgs[[i]]))
     pairs[[i]]$client$close_write()
   }
-  got = vapply(reads, function(r) rawToChar(wait_for(r, 40)), "")
+  got = vapply(reads, \(r) rawToChar(wait_for(r, 40)), "")
   expect_identical(got, paste0(msgs, toupper(msgs)))
 
   pairs[[1]]$client$close()
@@ -150,7 +161,8 @@ test_that("concurrent connections from one or more clients keep their streams se
 })
 
 test_that("dialing a TCP port nobody listens on fails fast instead of hanging", {
-  # from tailcat_test.go: TestHalfClose (filtered port 81); the C ABI server refuses rather than drops
+  # from tailcat_test.go: TestHalfClose (filtered port 81); the C ABI server refuses rather than
+  # drops
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0)
@@ -189,8 +201,10 @@ test_that("info() and the address fields still work after both sides half-close"
     "repeat {",
     "  res = tryCatch({",
     "    info = sc$info(timeout = 5)",
-    "    stopifnot(identical(info$local_address, sc$local_address), identical(info$remote_address, sc$remote_address))",
-    "    stopifnot(identical(sc$remote_address, cc$local_address), identical(sc$local_address, cc$remote_address))",
+    "    stopifnot(identical(info$local_address, sc$local_address))",
+    "    stopifnot(identical(info$remote_address, sc$remote_address))",
+    "    stopifnot(identical(sc$remote_address, cc$local_address))",
+    "    stopifnot(identical(sc$local_address, cc$remote_address))",
     "    'ok'",
     "  }, error = function(e) paste(class(e)[1], conditionMessage(e)))",
     "  if (res != 'ok' || Sys.time() > deadline) break",

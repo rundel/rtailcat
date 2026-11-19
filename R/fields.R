@@ -27,16 +27,24 @@ field_map = c(
 
 snake_case = function(x) {
   mapped = unname(field_map[x])
-  mechanical = tolower(gsub("([a-z0-9])([A-Z])", "\\1_\\2", gsub("([A-Z]+)([A-Z][a-z])", "\\1_\\2", x)))
+  mechanical = tolower(gsub(
+    "([a-z0-9])([A-Z])",
+    "\\1_\\2",
+    gsub("([A-Z]+)([A-Z][a-z])", "\\1_\\2", x)
+  ))
   ifelse(is.na(mapped), mechanical, mapped)
 }
 
 pascal_case = function(x) {
   mapped = names(field_map)[match(x, field_map)]
   is_snake = grepl("^[a-z][a-z0-9_]*$", x)
-  mechanical = vapply(strsplit(x, "_", fixed = TRUE), function(parts) {
-    paste0(toupper(substring(parts, 1, 1)), substring(parts, 2), collapse = "")
-  }, "")
+  mechanical = vapply(
+    strsplit(x, "_", fixed = TRUE),
+    function(parts) {
+      paste0(toupper(substring(parts, 1, 1)), substring(parts, 2), collapse = "")
+    },
+    character(1)
+  )
   ifelse(!is.na(mapped), mapped, ifelse(is_snake, mechanical, x))
 }
 

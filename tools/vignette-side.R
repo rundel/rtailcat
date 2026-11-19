@@ -47,11 +47,11 @@ local({
 
   run_cell = function(code, out) {
     handler = evaluate::new_output_handler(
-      source = function(src, expr) emit(out, sub("\n$", "", src$src)),
-      text = function(x) emit(out, as_output(x)),
-      message = function(m) emit(out, as_output(conditionMessage(m))),
-      warning = function(w) emit(out, as_output(paste0("Warning: ", conditionMessage(w)))),
-      error = function(e) emit(out, as_output(paste(format_error(e), collapse = "\n")))
+      source = \(src, expr) emit(out, sub("\n$", "", src$src)),
+      text = \(x) emit(out, as_output(x)),
+      message = \(m) emit(out, as_output(conditionMessage(m))),
+      warning = \(w) emit(out, as_output(paste0("Warning: ", conditionMessage(w)))),
+      error = \(e) emit(out, as_output(paste(format_error(e), collapse = "\n")))
     )
     evaluate::evaluate(code, envir = globalenv(), output_handler = handler, stop_on_error = 0L)
     invisible()

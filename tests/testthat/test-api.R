@@ -31,8 +31,15 @@ test_that("addresses are accepted with surrounding whitespace", {
   cl = TailcatClient$new(paste0(addr, "\r\n"))
   expect_false(cl$is_closed)
   cl$close()
-  resolved = tc_address(list(p = as.raw(1:32), k = as.raw(33:64), r = list(list(N = list(list(h = "relay.invalid"))))))
-  expect_identical(unclass(tailcat_address_resolve(paste0("\t", resolved, "\n"), timeout = 5)), resolved)
+  resolved = tc_address(list(
+    p = as.raw(1:32),
+    k = as.raw(33:64),
+    r = list(list(N = list(list(h = "relay.invalid"))))
+  ))
+  expect_identical(
+    unclass(tailcat_address_resolve(paste0("\t", resolved, "\n"), timeout = 5)),
+    resolved
+  )
   expect_error(TailcatClient$new("   "), class = "tailcat_invalid_argument")
   expect_error(tailcat_address_parse("\n"), class = "tailcat_invalid_argument")
 })
@@ -42,10 +49,22 @@ test_that("read-only fields of servers and clients refuse assignment", {
   on.exit(srv$close())
   cl = offline_client()
   for (field in c("address", "public_key", "is_started", "is_closed")) {
-    expect_error({srv[[field]] = "x"}, "read-only", class = "tailcat_invalid_argument")
+    expect_error(
+      {
+        srv[[field]] = "x"
+      },
+      "read-only",
+      class = "tailcat_invalid_argument"
+    )
   }
   for (field in c("public_key", "is_closed")) {
-    expect_error({cl[[field]] = "x"}, "read-only", class = "tailcat_invalid_argument")
+    expect_error(
+      {
+        cl[[field]] = "x"
+      },
+      "read-only",
+      class = "tailcat_invalid_argument"
+    )
   }
 })
 
@@ -89,7 +108,11 @@ test_that("objects restored from a saved session are closed and say why", {
   expect_match(printed(rc), "closed (restored from a saved session)", fixed = TRUE)
   expect_error(rs$public_key, class = "tailcat_closed")
   expect_error(rc$public_key, class = "tailcat_closed")
-  for (cond in list(tryCatch(rs$info(), error = identity), tryCatch(rc$public_key, error = identity), tryCatch(wait_for(rc$ping_async(), 10), error = identity))) {
+  for (cond in list(
+    tryCatch(rs$info(), error = identity),
+    tryCatch(rc$public_key, error = identity),
+    tryCatch(wait_for(rc$ping_async(), 10), error = identity)
+  )) {
     expect_s3_class(cond, "tailcat_closed")
     expect_match(conditionMessage(cond), "restored from a saved session")
     expect_match(conditionMessage(cond), "do not survive serialization")
@@ -121,10 +144,22 @@ test_that("read arguments, listener and connection fields, and blocking accept w
   expect_identical(sc$read(n = 2^31 - 1, timeout = 20), charToRaw("x"))
 
   for (field in c("port", "local_address", "network", "server", "is_closed")) {
-    expect_error({lst[[field]] = 1}, "read-only", class = "tailcat_invalid_argument")
+    expect_error(
+      {
+        lst[[field]] = 1
+      },
+      "read-only",
+      class = "tailcat_invalid_argument"
+    )
   }
   for (field in c("local_address", "remote_address", "network", "is_closed")) {
-    expect_error({sc[[field]] = 1}, "read-only", class = "tailcat_invalid_argument")
+    expect_error(
+      {
+        sc[[field]] = 1
+      },
+      "read-only",
+      class = "tailcat_invalid_argument"
+    )
   }
   expect_identical(lst$server, srv)
 
@@ -153,7 +188,10 @@ test_that("an interrupt ends a blocking accept and leaves the listener usable", 
   seen = wait_child_line(child, "^READY", timeout = 60)
   if (!any(grepl("^READY", seen))) {
     child$kill()
-    fail(paste(c("the child never reported READY; its standard error was:", child$read_all_error_lines()), collapse = "\n"))
+    fail(paste(
+      c("the child never reported READY; its standard error was:", child$read_all_error_lines()),
+      collapse = "\n"
+    ))
     return()
   }
   Sys.sleep(0.5)

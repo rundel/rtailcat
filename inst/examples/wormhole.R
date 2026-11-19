@@ -36,7 +36,7 @@ wormhole_send = function(x, timeout = 600) {
       conn$write_message(payload, timeout = timeout)
       conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
     },
-    tailcat_failure = function(e) NULL
+    tailcat_failure = \(e) NULL
   )
   if (!identical(reply, "ok")) {
     cli::cli_abort("The receiver did not confirm the transfer.")
@@ -57,7 +57,9 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
   # the sender, so a refused transfer does not leave the sender waiting
   on.exit(
     {
-      if (!is.null(conn)) conn$close()
+      if (!is.null(conn)) {
+        conn$close()
+      }
       cl$close(drain = 5)
     },
     add = TRUE

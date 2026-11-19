@@ -3,7 +3,9 @@ expect_format_matches_print = function(x) {
   expect_type(lines, "character")
   expect_identical(lines, x$format())
   expect_identical(utils::capture.output(print(x)), lines)
-  utils::capture.output(visible <- withVisible(print(x)))
+  utils::capture.output({
+    visible = withVisible(print(x))
+  })
   expect_identical(visible, list(value = x, visible = FALSE))
   invisible(lines)
 }
@@ -63,7 +65,11 @@ test_that("format() of listeners and connections matches print(), and shows endp
   out = expect_format_matches_print(cc)
   expect_true(paste0("  local:   ", cc$local_address) %in% out)
   expect_true(paste0("  remote:  ", cc$remote_address) %in% out)
-  expect_false(any(grepl(as.character(srv$address), c(format(sc), format(cc), format(lst)), fixed = TRUE)))
+  expect_false(any(grepl(
+    as.character(srv$address),
+    c(format(sc), format(cc), format(lst)),
+    fixed = TRUE
+  )))
 
   cc$close()
   out = expect_format_matches_print(cc)
@@ -138,8 +144,18 @@ test_that("connections give their owner through $client or $server, also after c
   expect_null(pair$client$server)
   expect_identical(pair$server$server, srv)
   expect_null(pair$server$client)
-  expect_error(pair$client$client <- NULL, class = "tailcat_invalid_argument")
-  expect_error(pair$server$server <- NULL, class = "tailcat_invalid_argument")
+  expect_error(
+    {
+      pair$client$client = NULL
+    },
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    {
+      pair$server$server = NULL
+    },
+    class = "tailcat_invalid_argument"
+  )
 
   pair$client$close()
   srv$close()

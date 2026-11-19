@@ -18,17 +18,37 @@ expect_message_shape = function(cond, headline, lines = NULL) {
 }
 
 test_that("each status has its own headline naming the operation or object", {
-  err = function(status, message = "") structure(list(status = status, message = message, bytes = 0L), class = "rtc_error")
-  cond = function(status, ...) rtailcat:::rtc_condition(err(status, "upstream text"), ...)
+  err = \(status, message = "") {
+    structure(list(status = status, message = message, bytes = 0L), class = "rtc_error")
+  }
+  cond = \(status, ...) rtailcat:::rtc_condition(err(status, "upstream text"), ...)
 
   expect_message_shape(cond(1L, op = "read", arg = "n"), "^`n` is invalid\\.$")
-  expect_message_shape(cond(1L, op = "dial port 80"), "^Could not dial port 80: an argument is invalid\\.$")
-  expect_message_shape(cond(2L, op = "read", object = "connection"), "^The connection is closed\\.$")
+  expect_message_shape(
+    cond(1L, op = "dial port 80"),
+    "^Could not dial port 80: an argument is invalid\\.$"
+  )
+  expect_message_shape(
+    cond(2L, op = "read", object = "connection"),
+    "^The connection is closed\\.$"
+  )
   expect_message_shape(cond(2L, object = "listener"), "^The listener is closed\\.$")
-  expect_message_shape(cond(3L, op = "read", timeout = 30), "^Timed out after 30 seconds trying to read\\.$")
-  expect_message_shape(cond(3L, op = "read", timeout = 1), "^Timed out after 1 second trying to read\\.$")
-  expect_message_shape(cond(3L, op = "read", timeout = 0.25), "^Timed out after 0\\.25 seconds trying to read\\.$")
-  expect_message_shape(cond(3L, op = "accept a connection", timeout = 0), "^Could not accept a connection without waiting \\(`timeout = 0`\\)\\.$")
+  expect_message_shape(
+    cond(3L, op = "read", timeout = 30),
+    "^Timed out after 30 seconds trying to read\\.$"
+  )
+  expect_message_shape(
+    cond(3L, op = "read", timeout = 1),
+    "^Timed out after 1 second trying to read\\.$"
+  )
+  expect_message_shape(
+    cond(3L, op = "read", timeout = 0.25),
+    "^Timed out after 0\\.25 seconds trying to read\\.$"
+  )
+  expect_message_shape(
+    cond(3L, op = "accept a connection", timeout = 0),
+    "^Could not accept a connection without waiting \\(`timeout = 0`\\)\\.$"
+  )
   expect_message_shape(cond(4L, op = "read"), "^Canceled while trying to read\\.$")
   expect_message_shape(cond(5L, op = "dial port 80"), "^Could not dial port 80\\.$")
   for (status in 1:5) {
@@ -38,17 +58,34 @@ test_that("each status has its own headline naming the operation or object", {
 })
 
 test_that("tailcat's text is one unwrapped detail line without the redundant prefix", {
-  long = paste("invalid argument:", paste(rep("a long upstream message", 20), collapse = " "), "\nwith a newline")
+  long = paste(
+    "invalid argument:",
+    paste(rep("a long upstream message", 20), collapse = " "),
+    "\nwith a newline"
+  )
   withr::local_options(width = 20, cli.width = 20)
-  cond = rtailcat:::rtc_condition(structure(list(status = 5L, message = long, bytes = 0L), class = "rtc_error"), op = "read")
+  cond = rtailcat:::rtc_condition(
+    structure(list(status = 5L, message = long, bytes = 0L), class = "rtc_error"),
+    op = "read"
+  )
   parts = strsplit(conditionMessage(cond), "\n", fixed = TRUE)[[1]]
   expect_length(parts, 2)
   expect_false(grepl("invalid argument:", parts[[2]], fixed = TRUE))
   expect_match(parts[[2]], "tailcat: a long upstream message .* with a newline$")
 
-  quiet = rtailcat:::rtc_condition(structure(list(status = 3L, message = "", bytes = 0L), class = "rtc_error"), op = "read", timeout = 2)
+  quiet = rtailcat:::rtc_condition(
+    structure(list(status = 3L, message = "", bytes = 0L), class = "rtc_error"),
+    op = "read",
+    timeout = 2
+  )
   expect_identical(conditionMessage(quiet), "Timed out after 2 seconds trying to read.")
-  native = rtailcat:::rtc_condition(structure(list(status = 5L, message = "rtailcat: could not start a worker thread", bytes = 0L), class = "rtc_error"), op = "read")
+  native = rtailcat:::rtc_condition(
+    structure(
+      list(status = 5L, message = "rtailcat: could not start a worker thread", bytes = 0L),
+      class = "rtc_error"
+    ),
+    op = "read"
+  )
   expect_match(conditionMessage(native), "\nrtailcat: could not start|rtailcat: could not start")
   expect_false(grepl("tailcat: rtailcat:", conditionMessage(native), fixed = TRUE))
 })
@@ -69,7 +106,10 @@ test_that("real errors carry a headline, an unwrapped detail, and the user-facin
   expect_identical(deparse(caught(TailcatClient$new("nope"))$call[[1]]), "TailcatClient$new")
   expect_message_shape(caught(TailcatClient$new("nope")), "`address`")
   expect_message_shape(caught(TailcatServer$new(region_id = -1)), "`region_id`")
-  expect_identical(deparse(caught(TailcatServer$new(region_id = -1))$call[[1]]), "TailcatServer$new")
+  expect_identical(
+    deparse(caught(TailcatServer$new(region_id = -1))$call[[1]]),
+    "TailcatServer$new"
+  )
 
   parsed = caught(tailcat_address_parse("not an address"))
   expect_message_shape(parsed, "`address` is invalid", lines = 2)
@@ -84,7 +124,14 @@ test_that("real errors carry a headline, an unwrapped detail, and the user-facin
   address = caught(srv$address)
   expect_message_shape(address, "has not started")
   expect_identical(deparse(address$call), "srv$address")
-  expect_identical(deparse(caught({srv$address = 1})$call), "srv$address")
+  expect_identical(
+    deparse(
+      caught({
+        srv$address = 1
+      })$call
+    ),
+    "srv$address"
+  )
 
   map_url = silent_map_url()
   cl = TailcatClient$new(offline_address(), derp_map_url = map_url)
@@ -108,7 +155,11 @@ test_that("async rejections name the call and carry no backtrace", {
   expect_null(cond$trace)
   expect_identical(deparse(cond$call[[1]]), "cl$ping_async")
   expect_identical(conditionMessage(cond), "The client is closed.")
-  expect_false(grepl("Backtrace", paste(utils::capture.output(print(cond)), collapse = "\n"), fixed = TRUE))
+  expect_false(grepl(
+    "Backtrace",
+    paste(utils::capture.output(print(cond)), collapse = "\n"),
+    fixed = TRUE
+  ))
 
   map_url = silent_map_url()
   live = TailcatClient$new(offline_address(), derp_map_url = map_url)
@@ -123,6 +174,6 @@ test_that("an unhandled rejection is reported with the headline first", {
   cl = TailcatClient$new(offline_address())
   cl$close()
   cl$ping_async()
-  out = utils::capture.output(invisible(run_until(function() FALSE, 1)), type = "message")
+  out = utils::capture.output(invisible(run_until(\() FALSE, 1)), type = "message")
   expect_identical(out, "Unhandled promise error: The client is closed.")
 })

@@ -36,7 +36,7 @@ TailcatListener = R6::R6Class(
         abort_invalid("Listeners are created by {.code TailcatServer$listen()}.")
       }
       private$handle = handle
-      private$parent = server
+      private$owner = server
       private$network_code = as.integer(network)
       invisible(self)
     },
@@ -46,8 +46,12 @@ TailcatListener = R6::R6Class(
     #' @return A [TailcatConnection].
     accept = function(timeout = Inf) {
       timeout = check_timeout(timeout)
-      h = private$check(rtc_listener_accept(private$handle, timeout, NULL), "accept a connection", timeout)
-      private$wrap(h)
+      handle = private$check(
+        rtc_listener_accept(private$handle, timeout, NULL),
+        "accept a connection",
+        timeout
+      )
+      private$wrap(handle)
     },
 
     #' @description Asynchronous version of `$accept()`.
@@ -55,7 +59,12 @@ TailcatListener = R6::R6Class(
     #' @return A promise resolving with a [TailcatConnection].
     accept_async = function(timeout = Inf) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_listener_accept(private$handle, timeout, cb), private$wrap, "accept a connection", timeout)
+      private$promise(
+        \(callback) rtc_listener_accept(private$handle, timeout, callback),
+        private$wrap,
+        "accept a connection",
+        timeout
+      )
     },
 
     #' @description Start an asynchronous accept loop that calls `handler(conn)` for every connection. See the section on serving connections.
@@ -69,11 +78,15 @@ TailcatListener = R6::R6Class(
         abort_closed("listener", private$handle)
       }
       if (private$serving) {
-        tailcat_abort(5L, headline = "This listener is already serving.", bullets = c(i = "Call `$stop_serving()` first to serve with a new handler."))
+        tailcat_abort(
+          status_failure,
+          headline = "This listener is already serving.",
+          bullets = c(i = "Call `$stop_serving()` first to serve with a new handler.")
+        )
       }
       private$serving = TRUE
-      private$serve_gen = private$serve_gen + 1L
-      private$serve_next(handler, on_error, private$serve_gen)
+      private$serve_generation = private$serve_generation + 1L
+      private$serve_next(handler, on_error, private$serve_generation)
       invisible(self)
     },
 
@@ -82,7 +95,7 @@ TailcatListener = R6::R6Class(
     stop_serving = function() {
       if (private$serving) {
         private$serving = FALSE
-        private$serve_gen = private$serve_gen + 1L
+        private$serve_generation = private$serve_generation + 1L
         if (!is.null(private$serve_cancel)) {
           rtc_cancel(private$serve_cancel)
           private$serve_cancel = NULL
@@ -96,7 +109,11 @@ TailcatListener = R6::R6Class(
     #' @return A list with `local_address` and `network`.
     info = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      parse_info(private$check(rtc_info(private$handle, timeout, NULL), "get the listener's information", timeout))
+      parse_info(private$check(
+        rtc_info(private$handle, timeout, NULL),
+        "get the listener's information",
+        timeout
+      ))
     },
 
     #' @description Asynchronous version of `$info()`.
@@ -104,7 +121,12 @@ TailcatListener = R6::R6Class(
     #' @return A promise resolving with the info list.
     info_async = function(timeout = 30) {
       timeout = check_timeout(timeout)
-      private$promise(function(cb) rtc_info(private$handle, timeout, cb), parse_info, "get the listener's information", timeout)
+      private$promise(
+        \(callback) rtc_info(private$handle, timeout, callback),
+        parse_info,
+        "get the listener's information",
+        timeout
+      )
     },
 
     #' @description Stop accepting connections. Accepted connections stay open. Closing twice is harmless.
@@ -121,11 +143,20 @@ TailcatListener = R6::R6Class(
       closed = self$is_closed
       lines = c(
         "<TailcatListener>",
-        paste0("  state:   ", state_label(closed, handle = private$handle), if (private$serving && !closed) " (serving)" else ""),
+        paste0(
+          "  state:   ",
+          state_label(closed, handle = private$handle),
+          if (private$serving && !closed) " (serving)" else ""
+        ),
         paste0("  network: ", network_name(private$network_code))
       )
       if (!closed) {
-        port = safely(endpoint_port(parse_info(rtc_value(rtc_info(private$handle, 5, NULL)))$local_address), NA_integer_)
+        port = safely(
+          endpoint_port(
+            parse_info(rtc_value(rtc_info(private$handle, format_timeout, NULL)))$local_address
+          ),
+          NA_integer_
+        )
         lines = c(lines, paste0("  port:    ", if (is.na(port)) "<unknown>" else port))
       }
       lines
@@ -158,26 +189,43 @@ TailcatListener = R6::R6Class(
     #' @field server The owning [TailcatServer].
     server = function(value) {
       private$read_only("server", value)
-      private$parent
+      private$owner
     },
     #' @field is_closed `TRUE` once the listener or its server has been closed.
     is_closed = function(value) {
       private$read_only("is_closed", value)
-      rtc_is_closed(private$handle) || private$parent$is_closed
+      rtc_is_closed(private$handle) || private$owner$is_closed
     }
   ),
   private = list(
     handle = NULL,
-    parent = NULL,
+    owner = NULL,
     network_code = NULL,
     serving = FALSE,
-    serve_gen = 0L,
+    serve_generation = 0L,
     serve_cancel = NULL,
     check = function(x, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_value(x, op = op, object = "listener", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_value(
+        x,
+        op = op,
+        object = "listener",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
     },
     promise = function(start, transform, op, timeout = NULL, ..., call = rlang::caller_env()) {
-      rtc_promise(start, transform, op = op, object = "listener", timeout = timeout, handle = private$handle, ..., call = call)
+      rtc_promise(
+        start,
+        transform,
+        op = op,
+        object = "listener",
+        timeout = timeout,
+        handle = private$handle,
+        ...,
+        call = call
+      )
     },
     read_only = function(field, value) {
       if (!missing(value)) {
@@ -186,13 +234,18 @@ TailcatListener = R6::R6Class(
     },
     field_info = function(field, value) {
       private$read_only(field, value)
-      parse_info(private$check(rtc_info(private$handle, 30, NULL), "get the listener's information", 30, call = field_call("lst", field)))
+      parse_info(private$check(
+        rtc_info(private$handle, field_timeout, NULL),
+        "get the listener's information",
+        field_timeout,
+        call = field_call("lst", field)
+      ))
     },
-    wrap = function(h) {
-      TailcatConnection$new(h, private$parent, private$network_code)
+    wrap = function(handle) {
+      TailcatConnection$new(handle, private$owner, private$network_code)
     },
-    serve_next = function(handler, on_error, gen) {
-      if (gen != private$serve_gen) {
+    serve_next = function(handler, on_error, generation) {
+      if (generation != private$serve_generation) {
         return(invisible())
       }
       if (self$is_closed) {
@@ -200,47 +253,64 @@ TailcatListener = R6::R6Class(
         private$serve_cancel = NULL
         return(invisible())
       }
-      private$serve_cancel = rtc_listener_accept(private$handle, Inf, rtc_callback(
-        function(result) private$serve_result(result, handler, on_error, gen),
-        on_error = function(e) {
-          if (gen == private$serve_gen) {
-            private$serving = FALSE
-            private$serve_cancel = NULL
+      private$serve_cancel = rtc_listener_accept(
+        private$handle,
+        Inf,
+        rtc_callback(
+          \(result) private$serve_result(result, handler, on_error, generation),
+          on_error = function(e) {
+            if (generation == private$serve_generation) {
+              private$serving = FALSE
+              private$serve_cancel = NULL
+            }
+            deferred_warning(paste0("rtailcat: serve() loop stopped: ", conditionMessage(e)))
           }
-          deferred_warning(paste0("rtailcat: serve() loop stopped: ", conditionMessage(e)))
-        }
-      ))
+        )
+      )
       invisible()
     },
-    serve_result = function(result, handler, on_error, gen) {
-      current = gen == private$serve_gen
+    serve_result = function(result, handler, on_error, generation) {
+      current = generation == private$serve_generation
       if (inherits(result, "rtc_error")) {
         if (!current) {
           return(invisible())
         }
-        if (result$status == 2L || self$is_closed) {
+        if (result$status == status_closed || self$is_closed) {
           private$serving = FALSE
           private$serve_cancel = NULL
           return(invisible())
         }
-        report_error(rtc_condition(result, op = "accept a connection", object = "listener", handle = private$handle), NULL, on_error, "accepting a connection")
-        later::later(function() {
-          tryCatch(private$serve_next(handler, on_error, gen), error = function(e) {
-            if (gen == private$serve_gen) {
-              private$serving = FALSE
-            }
-            deferred_warning(paste0("rtailcat: serve() loop stopped: ", conditionMessage(e)))
-          })
-        }, delay = 1)
+        report_error(
+          rtc_condition(
+            result,
+            op = "accept a connection",
+            object = "listener",
+            handle = private$handle
+          ),
+          NULL,
+          on_error,
+          "accepting a connection"
+        )
+        later::later(
+          function() {
+            tryCatch(private$serve_next(handler, on_error, generation), error = function(e) {
+              if (generation == private$serve_generation) {
+                private$serving = FALSE
+              }
+              deferred_warning(paste0("rtailcat: serve() loop stopped: ", conditionMessage(e)))
+            })
+          },
+          delay = 1
+        )
         return(invisible())
       }
       conn = private$wrap(result)
       if (current) {
-        private$serve_next(handler, on_error, gen)
+        private$serve_next(handler, on_error, generation)
       }
       handler_failed = function(e) {
         report_error(e, conn, on_error, "the connection handler")
-        tryCatch(conn$close(), error = function(e2) NULL)
+        tryCatch(conn$close(), error = \(e2) NULL)
         invisible()
       }
       tryCatch(
@@ -272,6 +342,6 @@ report_error = function(cond, conn, on_error, where) {
 }
 
 deferred_warning = function(message) {
-  later::later(function() warning(message, call. = FALSE))
+  later::later(\() rlang::warn(message, class = "tailcat_warning"))
   invisible()
 }

@@ -10,7 +10,11 @@ examples_dir = function() {
 example_files = c("wormhole", "progress", "proxy")
 
 load_examples = function(env = parent.frame()) {
-  withr::local_options(rtailcat.region = relay_region(), rtailcat.derp_map_url = relay_derp_map_url(), .local_envir = env)
+  withr::local_options(
+    rtailcat.region = relay_region(),
+    rtailcat.derp_map_url = relay_derp_map_url(),
+    .local_envir = env
+  )
   env = new.env(parent = asNamespace("rtailcat"))
   for (f in example_files) {
     sys.source(file.path(examples_dir(), paste0(f, ".R")), envir = env)
@@ -23,7 +27,11 @@ example_child = function(code) {
   child_r(c(
     paste0("examples = ", deparse(examples_dir())),
     "options(rtailcat.region = region, rtailcat.derp_map_url = derp_map_url)",
-    paste0("for (f in ", deparse(example_files), ") sys.source(file.path(examples, paste0(f, '.R')), envir = globalenv())"),
+    paste0(
+      "for (f in ",
+      deparse(example_files),
+      ") sys.source(file.path(examples, paste0(f, '.R')), envir = globalenv())"
+    ),
     "withCallingHandlers({",
     code,
     "}, message = function(m) {",
@@ -38,7 +46,10 @@ child_address = function(proc) {
   lines = wait_child_line(proc, pattern)
   found = regmatches(lines, regexpr(pattern, lines))
   if (length(found) == 0) {
-    stop("the child printed no address:\n", paste(c(lines, proc$read_all_error_lines()), collapse = "\n"))
+    stop(
+      "the child printed no address:\n",
+      paste(c(lines, proc$read_all_error_lines()), collapse = "\n")
+    )
   }
   found[[1]]
 }
@@ -46,10 +57,19 @@ child_address = function(proc) {
 test_that("the example files parse and define the documented functions", {
   ex = load_examples()
   fns = c(
-    "wormhole_send", "wormhole_receive",
-    "progress_monitor", "progress_record", "progress_data", "progress_stop", "progress_app",
-    "progress_reporter", "progress_report", "progress_done",
-    "proxy_share", "proxy_open", "proxy_close"
+    "wormhole_send",
+    "wormhole_receive",
+    "progress_monitor",
+    "progress_record",
+    "progress_data",
+    "progress_stop",
+    "progress_app",
+    "progress_reporter",
+    "progress_report",
+    "progress_done",
+    "proxy_share",
+    "proxy_open",
+    "proxy_close"
   )
   for (fn in fns) {
     expect_true(is.function(ex[[fn]]), label = fn)
@@ -88,7 +108,7 @@ test_that("progress collects reports and drops oversized ones", {
   for (i in 1:5) {
     expect_true(ex$progress_report(reporter, iter = i, loss = 1 / i))
   }
-  expect_true(run_until(function() length(m$events) == 5, 20))
+  expect_true(run_until(\() length(m$events) == 5, 20))
   d = ex$progress_data(m)
   expect_identical(d$job, rep("a", 5))
   expect_identical(d$seq, 1:5)
@@ -100,12 +120,15 @@ test_that("progress collects reports and drops oversized ones", {
 # Runs an HTTP client in a separate process, because the proxy answers its
 # requests on this session's event loop.
 proxy_get = function(url, ...) {
-  fetch = callr::r_bg(function(url, args) {
-    handle = do.call(curl::new_handle, args)
-    res = curl::curl_fetch_memory(url, handle = handle)
-    list(status = res$status_code, body = rawToChar(res$content))
-  }, list(url = url, args = list(...)))
-  run_until(function() !fetch$is_alive(), 30)
+  fetch = callr::r_bg(
+    function(url, args) {
+      handle = do.call(curl::new_handle, args)
+      res = curl::curl_fetch_memory(url, handle = handle)
+      list(status = res$status_code, body = rawToChar(res$content))
+    },
+    list(url = url, args = list(...))
+  )
+  run_until(\() !fetch$is_alive(), 30)
   fetch$get_result()
 }
 
@@ -117,16 +140,23 @@ test_that("proxy forwards requests to an app on the other side", {
   ex = load_examples()
 
   app_port = httpuv::randomPort()
-  app = callr::r_bg(function(port) {
-    httpuv::runServer("127.0.0.1", port, list(call = function(req) {
-      body = rawToChar(req$rook.input$read())
-      list(
-        status = 200L,
-        headers = list("Content-Type" = "text/plain"),
-        body = paste(req$REQUEST_METHOD, req$PATH_INFO, req$QUERY_STRING, body)
+  app = callr::r_bg(
+    function(port) {
+      httpuv::runServer(
+        "127.0.0.1",
+        port,
+        list(call = function(req) {
+          body = rawToChar(req$rook.input$read())
+          list(
+            status = 200L,
+            headers = list("Content-Type" = "text/plain"),
+            body = paste(req$REQUEST_METHOD, req$PATH_INFO, req$QUERY_STRING, body)
+          )
+        })
       )
-    }))
-  }, list(port = app_port))
+    },
+    list(port = app_port)
+  )
   withr::defer(app$kill())
 
   child = example_child(paste0("srv = proxy_share(", app_port, "); tailcat_run(timeout = 120)"))
@@ -149,4 +179,3 @@ test_that("proxy forwards requests to an app on the other side", {
   expect_identical(res$status, 502L)
   expect_match(res$body, "could not reach the app")
 })
-

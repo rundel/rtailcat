@@ -23,7 +23,12 @@
 # Needs q2r (github.com/rundel/q2r), pkgload, processx, evaluate, withr, Go.
 
 address_placeholders = c("tcAbC...xYz", "tcDeF...uVw", "tcGhI...rSt", "tcJkL...oPq")
-key_placeholders = c("nodekey:3f1c...9a0e", "nodekey:b7d2...41c5", "nodekey:5e80...c3f7", "nodekey:a94b...07d2")
+key_placeholders = c(
+  "nodekey:3f1c...9a0e",
+  "nodekey:b7d2...41c5",
+  "nodekey:5e80...c3f7",
+  "nodekey:a94b...07d2"
+)
 address_pattern = "tc[A-Za-z0-9_-]{40,}"
 key_pattern = "nodekey:[0-9a-f]{64}"
 
@@ -47,8 +52,8 @@ main = function(args) {
   defs = example_files(cells)
   ok = sync_examples(defs, update)
 
-  usage = Filter(function(cell) !is.null(cell$side) && !identical(cell$opts$run, FALSE), cells)
-  names = unique(vapply(usage, function(cell) cell$example, character(1)))
+  usage = Filter(\(cell) !is.null(cell$side) && !identical(cell$opts$run, FALSE), cells)
+  names = unique(vapply(usage, \(cell) cell$example, character(1)))
   if (length(only) > 0) {
     unknown = setdiff(only, names)
     if (length(unknown) > 0) {
@@ -76,7 +81,7 @@ main = function(args) {
   new_code = list()
   for (name in names) {
     message("Running ", name)
-    example_cells = Filter(function(cell) cell$example == name, usage)
+    example_cells = Filter(\(cell) cell$example == name, usage)
     new_code = c(new_code, run_example(example_cells, root, defs_dir, relay$region))
   }
 
@@ -94,7 +99,12 @@ main = function(args) {
   }
   if (length(changed) > 0 && update) {
     rewrite_cells(vignette_path, new_code[changed])
-    message("Updated the output of ", length(changed), " cell(s): ", paste(changed, collapse = ", "))
+    message(
+      "Updated the output of ",
+      length(changed),
+      " cell(s): ",
+      paste(changed, collapse = ", ")
+    )
   }
   if (length(changed) == 0) {
     message("The recorded output is up to date")
@@ -128,14 +138,16 @@ vignette_cells = function(path) {
 }
 
 example_files = function(cells) {
-  defs = Filter(function(cell) !is.null(cell$def), cells)
-  names = unique(vapply(defs, function(cell) cell$def, character(1)))
+  defs = Filter(\(cell) !is.null(cell$def), cells)
+  names = unique(vapply(defs, \(cell) cell$def, character(1)))
   header = paste0(
-    "# Generated from ", vignette_path, " by tools/vignette.R\n",
+    "# Generated from ",
+    vignette_path,
+    " by tools/vignette.R\n",
     "# Edit the vignette, not this file\n"
   )
   out = lapply(names, function(name) {
-    code = vapply(Filter(function(cell) cell$def == name, defs), function(cell) cell$code, character(1))
+    code = vapply(Filter(\(cell) cell$def == name, defs), \(cell) cell$code, character(1))
     paste0(header, "\n", paste(code, collapse = "\n\n"), "\n")
   })
   stats::setNames(out, names)
@@ -181,7 +193,7 @@ run_example = function(cells, root, defs_dir, region) {
   home = file.path(work, "home")
   dir.create(home)
 
-  sides = unique(vapply(cells, function(cell) cell$side, character(1)))
+  sides = unique(vapply(cells, \(cell) cell$side, character(1)))
   procs = list()
   for (side in sides) {
     dir.create(file.path(work, side, "wd"), recursive = TRUE)
@@ -190,21 +202,33 @@ run_example = function(cells, root, defs_dir, region) {
       c(normalizePath(side_script), file.path(work, side), root, defs_dir),
       wd = file.path(work, side, "wd"),
       env = c("current", HOME = home, R_USER = home, RTAILCAT_TEST_REGION = region),
-      stdout = file.path(work, side, "log"), stderr = "2>&1",
-      cleanup = TRUE, cleanup_tree = TRUE
+      stdout = file.path(work, side, "log"),
+      stderr = "2>&1",
+      cleanup = TRUE,
+      cleanup_tree = TRUE
     )
   }
-  withr::defer(for (proc in procs) if (proc$is_alive()) proc$kill())
+  withr::defer(
+    for (proc in procs) {
+      if (proc$is_alive()) proc$kill()
+    }
+  )
 
   index = integer(length(cells))
   counter = stats::setNames(integer(length(sides)), sides)
-  out_file = function(k) file.path(work, cells[[k]]$side, paste0("cell-", index[[k]], ".out"))
-  done = function(k) file.exists(file.path(work, cells[[k]]$side, paste0("cell-", index[[k]], ".done")))
+  out_file = \(k) file.path(work, cells[[k]]$side, paste0("cell-", index[[k]], ".out"))
+  done = \(k) file.exists(file.path(work, cells[[k]]$side, paste0("cell-", index[[k]], ".done")))
   check_alive = function() {
     for (side in sides) {
       if (!procs[[side]]$is_alive()) {
         log = readLines(file.path(work, side, "log"), warn = FALSE)
-        stop("the ", side, " process exited:\n", paste(utils::tail(log, 20), collapse = "\n"), call. = FALSE)
+        stop(
+          "the ",
+          side,
+          " process exited:\n",
+          paste(utils::tail(log, 20), collapse = "\n"),
+          call. = FALSE
+        )
       }
     }
   }
@@ -218,7 +242,7 @@ run_example = function(cells, root, defs_dir, region) {
       Sys.sleep(0.1)
     }
   }
-  started = function() seq_len(sum(index > 0))
+  started = \() seq_len(sum(index > 0))
   outputs = function() {
     lapply(started(), function(k) {
       path = out_file(k)
@@ -229,17 +253,28 @@ run_example = function(cells, root, defs_dir, region) {
   for (k in seq_along(cells)) {
     cell = cells[[k]]
     earlier = seq_len(k - 1)
-    wait(function() {
-      all(vapply(earlier, function(j) {
-        done(j) || (isTRUE(cells[[j]]$opts$blocks) && cells[[j]]$side != cell$side)
-      }, logical(1)))
-    }, paste("the cells before", cell$label))
+    wait(
+      function() {
+        all(vapply(
+          earlier,
+          function(j) {
+            done(j) || (isTRUE(cells[[j]]$opts$blocks) && cells[[j]]$side != cell$side)
+          },
+          logical(1)
+        ))
+      },
+      paste("the cells before", cell$label)
+    )
 
     code = strip_output(cell$code)
     used = c(address_placeholders, key_placeholders)
-    used = used[vapply(used, function(p) grepl(p, code, fixed = TRUE), logical(1))]
+    used = used[vapply(used, \(p) grepl(p, code, fixed = TRUE), logical(1))]
     if (length(used) > 0) {
-      wait(function() all(used %in% placeholder_map(outputs())$placeholder), paste("the values used in", cell$label), 60)
+      wait(
+        \() all(used %in% placeholder_map(outputs())$placeholder),
+        paste("the values used in", cell$label),
+        60
+      )
       map = placeholder_map(outputs())
       for (p in used) {
         code = gsub(p, map$value[map$placeholder == p], code, fixed = TRUE)
@@ -253,29 +288,32 @@ run_example = function(cells, root, defs_dir, region) {
     file.rename(paste0(cmd, ".tmp"), cmd)
   }
 
-  waiting = Filter(function(k) !isTRUE(cells[[k]]$opts$blocks), seq_along(cells))
-  wait(function() all(vapply(waiting, done, logical(1))), "the last cells")
+  waiting = Filter(\(k) !isTRUE(cells[[k]]$opts$blocks), seq_along(cells))
+  wait(\() all(vapply(waiting, done, logical(1))), "the last cells")
 
   # Blocking cells that never return (a server) are stopped once their output
   # has been quiet for a while.
   last = NULL
   quiet_since = Sys.time()
-  wait(function() {
-    now = outputs()
-    if (!identical(now, last)) {
-      last <<- now
-      quiet_since <<- Sys.time()
-    }
-    all(vapply(seq_along(cells), done, logical(1))) || Sys.time() - quiet_since > 3
-  }, "the blocking cells to finish")
+  wait(
+    function() {
+      now = outputs()
+      if (!identical(now, last)) {
+        last <<- now
+        quiet_since <<- Sys.time()
+      }
+      all(vapply(seq_along(cells), done, logical(1))) || Sys.time() - quiet_since > 3
+    },
+    "the blocking cells to finish"
+  )
 
   for (side in sides) {
     file.create(file.path(work, side, "quit"))
   }
   final = outputs()
   map = placeholder_map(final)
-  result = lapply(seq_along(cells), function(k) normalize(final[[k]], map))
-  stats::setNames(result, vapply(cells, function(cell) cell$label, character(1)))
+  result = lapply(seq_along(cells), \(k) normalize(final[[k]], map))
+  stats::setNames(result, vapply(cells, \(cell) cell$label, character(1)))
 }
 
 strip_output = function(code) {
@@ -286,7 +324,7 @@ strip_output = function(code) {
 # Real values in order of first appearance, and their placeholders.
 placeholder_map = function(outputs) {
   text = paste(unlist(outputs), collapse = "\n")
-  find = function(pattern) unique(regmatches(text, gregexpr(pattern, text))[[1]])
+  find = \(pattern) unique(regmatches(text, gregexpr(pattern, text))[[1]])
   addresses = find(address_pattern)
   keys = find(key_pattern)
   if (length(addresses) > length(address_placeholders) || length(keys) > length(key_placeholders)) {
@@ -313,7 +351,11 @@ show_diff = function(label, old, new) {
   b = tempfile()
   writeLines(old, a)
   writeLines(new, b)
-  diff = suppressWarnings(system2("diff", c("-u", "--label", "recorded", "--label", "now", a, b), stdout = TRUE))
+  diff = suppressWarnings(system2(
+    "diff",
+    c("-u", "--label", "recorded", "--label", "now", a, b),
+    stdout = TRUE
+  ))
   message("Output of `", label, "` differs:")
   message(paste(diff, collapse = "\n"))
   unlink(c(a, b))
@@ -330,7 +372,7 @@ rewrite_cells = function(path, new_code) {
     tree = q2r::replace_nodes(
       tree,
       kind == "pandoc_code_block" & grepl(marker, text, fixed = TRUE),
-      .with = function(node) q2r::ts_node(kind = node@kind, text = replace_cell_code(node@text, code))
+      .with = \(node) q2r::ts_node(kind = node@kind, text = replace_cell_code(node@text, code))
     )
   }
   q2r::write_qmd(tree, path)

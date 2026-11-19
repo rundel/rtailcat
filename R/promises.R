@@ -39,8 +39,8 @@ tailcat_wait = function(promise, timeout = Inf) {
       state$done = TRUE
     }
   )
-  if (!run_loop(function() state$done, timeout)) {
-    tailcat_abort(3L, op = "wait for the promise", timeout = timeout)
+  if (!run_loop(\() state$done, timeout)) {
+    tailcat_abort(status_timeout, op = "wait for the promise", timeout = timeout)
   }
   if (!is.null(state$error)) {
     stop(state$error)
@@ -53,7 +53,11 @@ tailcat_wait = function(promise, timeout = Inf) {
 tailcat_run = function(until = NULL, timeout = Inf) {
   check_function(until, "until", null_ok = TRUE)
   timeout = check_timeout(timeout)
-  condition = if (is.null(until)) function() FALSE else function() isTRUE(until())
+  condition = if (is.null(until)) {
+    \() FALSE
+  } else {
+    \() isTRUE(until())
+  }
   invisible(run_loop(condition, timeout))
 }
 
@@ -69,4 +73,42 @@ run_loop = function(condition, timeout) {
       return(condition())
     }
   }
+}
+
+#' Cancel a pending asynchronous operation
+#'
+#' Cancels the operation behind a promise returned by any `_async()` method or function in this package. The promise then rejects with a condition of class `tailcat_canceled` (and `tailcat_error`). Cancellation only ends that operation: the connection, listener, client, or server stays usable, as after a timeout.
+#'
+#' Cancellation is delivered through the later event loop, like the operation's result, so the promise rejects once the event loop runs. If the operation had already finished, or finishes at the same moment, canceling does nothing and the promise keeps (or receives) its result. Canceling more than once is harmless.
+#'
+#' For `TailcatConnection$read_all_async()`, which reads in several steps, canceling ends the read in flight and no further reads are started; the condition's `bytes` field gives the number of bytes read before it, which are discarded.
+#'
+#' Only the promise returned by the `_async()` call can be canceled. A promise derived from it, for example with [promises::then()] or `%...>%`, does not carry the cancellation handle, so keep a reference to the original promise.
+#'
+#' @param promise A promise returned by an `_async()` method or function of this package.
+#' @return `promise`, invisibly.
+#' @examples
+#' \dontrun{
+#' srv = TailcatServer$new()
+#' lst = srv$listen(8080)
+#' pending = lst$accept_async()
+#' tailcat_cancel(pending)
+#' promises::catch(pending, function(e) message(class(e)[1]))
+#' }
+#' @export
+tailcat_cancel = function(promise) {
+  if (!promises::is.promise(promise)) {
+    abort_invalid(
+      "{.arg promise} must be a promise returned by an rtailcat {.code _async()} method or function, not {.obj_type_friendly {promise}}."
+    )
+  }
+  canceler = attr(promise, "rtailcat_cancel")
+  if (!is.function(canceler)) {
+    abort_invalid(c(
+      "{.arg promise} was not returned by an rtailcat {.code _async()} method or function.",
+      i = "Promises derived with {.fn promises::then} or a pipe cannot be canceled; cancel the original promise."
+    ))
+  }
+  canceler()
+  invisible(promise)
 }

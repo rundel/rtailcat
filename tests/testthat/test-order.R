@@ -6,7 +6,7 @@ test_that("back-to-back write_async() calls arrive in the order they were made",
   pair = connect_pair(lst, cl, lst$port)
 
   msgs = formatC(seq_len(500), width = 4, flag = "0")
-  pending = lapply(msgs, function(m) pair$client$write_async(paste0(m, ";")))
+  pending = lapply(msgs, \(m) pair$client$write_async(paste0(m, ";")))
   last = pending[[length(pending)]]
   expect_identical(wait_for(last, 60), 5L)
   pair$client$close_write()
@@ -22,12 +22,12 @@ test_that("several read_async() calls in flight receive consecutive chunks in or
   pair = connect_pair(lst, cl, lst$port)
 
   msgs = formatC(seq_len(40), width = 4, flag = "0")
-  pending = lapply(msgs, function(m) pair$server$read_async(n = 4, timeout = 60, as = "text"))
+  pending = lapply(msgs, \(m) pair$server$read_async(n = 4, timeout = 60, as = "text"))
   for (m in msgs) {
     pair$client$write(m)
     later::run_now(0.01)
   }
-  got = vapply(pending, function(p) wait_for(p, 30), "")
+  got = vapply(pending, \(p) wait_for(p, 30), "")
   expect_identical(got, msgs)
 })
 
@@ -78,7 +78,7 @@ test_that("closing a connection ends every queued operation with tailcat_closed"
   cl = relay_client(srv$address)
   pair = connect_pair(lst, cl, lst$port)
 
-  reads = lapply(1:3, function(i) promises::catch(pair$server$read_async(timeout = 60), identity))
+  reads = lapply(1:3, \(i) promises::catch(pair$server$read_async(timeout = 60), identity))
   later::run_now(0.1)
   started = Sys.time()
   pair$server$close()
@@ -100,7 +100,7 @@ test_that("a read and a write on one connection still run at the same time", {
   later::run_now(0.1)
   expect_identical(pair$client$write("ping"), 4L)
   expect_identical(wait_for(pair$client$write_async("pong"), 10), 4L)
-  cond = tryCatch(pair$server$read_all(timeout = 1), error = function(e) e)
+  cond = tryCatch(pair$server$read_all(timeout = 1), error = \(e) e)
   expect_s3_class(cond, "tailcat_timeout")
   expect_identical(as.double(cond$bytes), 8)
   pair$server$write("a")

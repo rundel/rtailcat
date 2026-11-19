@@ -1,0 +1,8 @@
+linters: linters_with_defaults(
+    assignment_linter = assignment_linter(operator = "="),
+    line_length_linter = NULL,
+    object_name_linter = object_name_linter(styles = c("snake_case", "CamelCase")),
+    object_usage_linter = NULL
+  )
+exclusions: list("R/cpp11.R", "R/utils.R" = list(object_name_linter = 1))
+encoding: "UTF-8"

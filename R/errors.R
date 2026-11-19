@@ -1,7 +1,14 @@
+# tailcat's status codes (TC_OK is 0), in the order of rtc_error_kinds.
+status_invalid_argument = 1L
+status_closed = 2L
+status_timeout = 3L
+status_canceled = 4L
+status_failure = 5L
+
 rtc_error_kinds = c("invalid_argument", "closed", "timeout", "canceled", "failure")
 
 rtc_error_class = function(status) {
-  kind = if (is.numeric(status) && length(status) == 1 && !is.na(status) && status %in% seq_along(rtc_error_kinds)) {
+  kind = if (is_number(status) && status %in% seq_along(rtc_error_kinds)) {
     rtc_error_kinds[[status]]
   } else {
     "failure"
@@ -20,21 +27,38 @@ rtc_error_class = function(status) {
 # - handle: lets a closed status say that the handle was restored from a
 #   saved session.
 # - headline, bullets: replace the default headline or add lines.
-tailcat_condition = function(status, detail = NULL, bytes = 0L, op = NULL, object = NULL, arg = NULL,
-                             timeout = NULL, handle = NULL, headline = NULL, bullets = NULL, hint = NULL,
-                             invalid_headline = NULL, call = NULL) {
+tailcat_condition = function(
+  status,
+  detail = NULL,
+  bytes = 0L,
+  op = NULL,
+  object = NULL,
+  arg = NULL,
+  timeout = NULL,
+  handle = NULL,
+  headline = NULL,
+  bullets = NULL,
+  hint = NULL,
+  invalid_headline = NULL,
+  call = NULL
+) {
   class = rtc_error_class(status)
   kind = sub("^tailcat_", "", class[[1]])
   if (kind == "invalid_argument" && is.null(headline)) {
     headline = invalid_headline
   }
   if (is.null(headline)) {
-    restored = kind == "closed" && !is.null(handle) && isTRUE(safely(rtc_is_restored(handle), FALSE))
+    restored = kind == "closed" &&
+      !is.null(handle) &&
+      isTRUE(safely(rtc_is_restored(handle), FALSE))
     headline = default_headline(kind, op, object, arg, timeout, restored)
     if (restored) {
-      bullets = c(bullets, i = cli::format_inline(
-        "Handles do not survive serialization ({.fn saveRDS}, {.fn save}, or a saved workspace); create a new {object %||% 'object'}."
-      ))
+      bullets = c(
+        bullets,
+        i = cli::format_inline(
+          "Handles do not survive serialization ({.fn saveRDS}, {.fn save}, or a saved workspace); create a new {object %||% 'object'}."
+        )
+      )
     }
   }
   if (kind == "timeout" && !identical(timeout, 0)) {
@@ -46,7 +70,7 @@ tailcat_condition = function(status, detail = NULL, bytes = 0L, op = NULL, objec
     class = class,
     message = paste(lines, collapse = "\n"),
     call = error_call(call),
-    status = if (is.numeric(status) && length(status) == 1) as.integer(status) else 5L,
+    status = if (is.numeric(status) && length(status) == 1) as.integer(status) else status_failure,
     bytes = bytes %||% 0L
   )
 }
@@ -72,7 +96,13 @@ entry_frame = function() {
 
 # For a result from the native layer, which reports failures as values.
 rtc_condition = function(err, ..., bytes = NULL, call = NULL) {
-  tailcat_condition(err$status, detail = err$message, bytes = bytes %||% err$bytes, ..., call = call)
+  tailcat_condition(
+    err$status,
+    detail = err$message,
+    bytes = bytes %||% err$bytes,
+    ...,
+    call = call
+  )
 }
 
 rtc_abort = function(err, ..., bytes = NULL, call = rlang::caller_env()) {
@@ -86,20 +116,21 @@ rtc_value = function(x, ..., call = rlang::caller_env()) {
   x
 }
 
-abort_invalid = function(message, call = rlang::caller_env(), .envir = parent.frame()) {
-  text = vapply(message, cli::format_inline, "", .envir = .envir, USE.NAMES = FALSE)
+abort_invalid = function(message, call = rlang::caller_env(), .envir = rlang::caller_env()) {
+  text = vapply(message, cli::format_inline, character(1), .envir = .envir, USE.NAMES = FALSE)
   names(text) = names(message)
-  tailcat_abort(1L, headline = text[[1]], bullets = text[-1], call = call)
+  tailcat_abort(status_invalid_argument, headline = text[[1]], bullets = text[-1], call = call)
 }
 
 abort_closed = function(object, handle = NULL, call = rlang::caller_env()) {
-  tailcat_abort(2L, object = object, handle = handle, call = call)
+  tailcat_abort(status_closed, object = object, handle = handle, call = call)
 }
 
 default_headline = function(kind, op, object, arg, timeout, restored) {
   op = op %||% "complete the operation"
   object = object %||% "object"
-  switch(kind,
+  switch(
+    kind,
     invalid_argument = if (is.null(arg)) {
       cli::format_inline("Could not {op}: an argument is invalid.")
     } else {
@@ -131,7 +162,7 @@ format_seconds = function(x) {
 # repeats the condition class. Text from the native layer itself starts with
 # "rtailcat: " and keeps that prefix instead.
 upstream_detail = function(message) {
-  if (!is.character(message) || length(message) != 1 || is.na(message)) {
+  if (!is_string(message)) {
     return(NULL)
   }
   text = trimws(gsub("[[:space:]]+", " ", message))
@@ -147,7 +178,13 @@ bullet_lines = function(bullets) {
     return(character())
   }
   kinds = names(bullets) %||% rep("", length(bullets))
-  symbols = c(i = cli::symbol$info, x = cli::symbol$cross, v = cli::symbol$tick, `!` = "!", `*` = cli::symbol$bullet)
+  symbols = c(
+    i = cli::symbol$info,
+    x = cli::symbol$cross,
+    v = cli::symbol$tick,
+    `!` = "!",
+    `*` = cli::symbol$bullet
+  )
   prefix = ifelse(kinds %in% names(symbols), symbols[kinds], " ")
   paste(prefix, unname(bullets))
 }

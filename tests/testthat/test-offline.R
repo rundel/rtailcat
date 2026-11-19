@@ -13,7 +13,7 @@ test_that("keygen returns distinct keys and redacts secrets when printed", {
   k2 = tailcat_keygen()
   expect_s3_class(k1, "tailcat_keys")
   expect_named(k1, c("private_key", "public_key", "preshared_key"))
-  expect_true(all(vapply(k1, function(x) is.character(x) && nzchar(x), logical(1))))
+  expect_true(all(vapply(k1, \(x) is.character(x) && nzchar(x), logical(1))))
   expect_false(identical(k1$private_key, k2$private_key))
   expect_match(k1$public_key, "^nodekey:")
 
@@ -31,7 +31,10 @@ test_that("address parsing rejects bad input", {
   expect_error(tailcat_address_parse(""), class = "tailcat_invalid_argument")
   expect_error(tailcat_address_parse(1), class = "tailcat_invalid_argument")
   expect_error(tailcat_address_parse(c("a", "b")), class = "tailcat_invalid_argument")
-  expect_error(tailcat_address_resolve("not an address", timeout = 5), class = "tailcat_invalid_argument")
+  expect_error(
+    tailcat_address_resolve("not an address", timeout = 5),
+    class = "tailcat_invalid_argument"
+  )
   expect_error(tailcat_address_resolve("x", timeout = -1), class = "tailcat_invalid_argument")
   expect_error(
     wait_for(tailcat_address_resolve_async("not an address", timeout = 5), 10),
@@ -56,16 +59,16 @@ test_that("tailcat errors map to condition classes", {
 })
 
 test_that("rtc_promise resolves values and rejects tailcat errors", {
-  ok = rtailcat:::rtc_promise(function(cb) cb("value"), toupper)
+  ok = rtailcat:::rtc_promise(\(cb) cb("value"), toupper)
   expect_identical(wait_for(ok, 5), "VALUE")
 
   err = structure(list(status = 3L, message = "late", bytes = 2L), class = "rtc_error")
-  bad = rtailcat:::rtc_promise(function(cb) cb(err))
-  cond = tryCatch(wait_for(bad, 5), error = function(e) e)
+  bad = rtailcat:::rtc_promise(\(cb) cb(err))
+  cond = tryCatch(wait_for(bad, 5), error = \(e) e)
   expect_s3_class(cond, "tailcat_timeout")
   expect_identical(cond$bytes, 2L)
 
-  broken = rtailcat:::rtc_promise(function(cb) cb("x"), function(x) stop("transform failed"))
+  broken = rtailcat:::rtc_promise(\(cb) cb("x"), \(x) stop("transform failed"))
   expect_error(wait_for(broken, 5), "transform failed")
 })
 
@@ -85,7 +88,11 @@ test_that("server configuration is validated", {
   srv = TailcatServer$new(
     key = keys,
     region_id = 1,
-    region = list(RegionID = 1L, RegionCode = "test", Nodes = list(list(Name = "n", RegionID = 1L, HostName = "localhost"))),
+    region = list(
+      RegionID = 1L,
+      RegionCode = "test",
+      Nodes = list(list(Name = "n", RegionID = 1L, HostName = "localhost"))
+    ),
     allowed_clients = tailcat_keygen()$public_key,
     udp_idle_timeout = 10
   )
@@ -161,7 +168,12 @@ test_that("arguments are checked before any work starts", {
   expect_error(srv$listen(network = "sctp"), class = "tailcat_invalid_argument")
   expect_error(srv$allow_client(NA_character_), class = "tailcat_invalid_argument")
   expect_error(srv$allow_client("nope"), class = "tailcat_invalid_argument")
-  expect_error({srv$address = "x"}, class = "tailcat_invalid_argument")
+  expect_error(
+    {
+      srv$address = "x"
+    },
+    class = "tailcat_invalid_argument"
+  )
 })
 
 test_that("payloads are converted to raw", {
@@ -187,7 +199,7 @@ test_that("the native layer rejects wrong handle kinds and argument types", {
 
 test_that("the package refuses to run in a forked child", {
   skip_on_os("windows")
-  res = parallel::mcparallel(tryCatch(tailcat_keygen(), error = function(e) conditionMessage(e)))
+  res = parallel::mcparallel(tryCatch(tailcat_keygen(), error = \(e) conditionMessage(e)))
   out = parallel::mccollect(res)[[1]]
   expect_type(out, "character")
   expect_match(out, "forked child", fixed = TRUE)
@@ -195,10 +207,12 @@ test_that("the package refuses to run in a forked child", {
 
 test_that("callbacks passed to the native layer never let errors escape", {
   seen = NULL
-  cb = rtailcat:::rtc_callback(function(x) stop("body failed"), on_error = function(e) seen <<- conditionMessage(e))
+  cb = rtailcat:::rtc_callback(\(x) stop("body failed"), on_error = \(e) {
+    seen <<- conditionMessage(e)
+  })
   expect_no_error(cb(1))
   expect_identical(seen, "body failed")
-  cb2 = rtailcat:::rtc_callback(function(x) stop("body"), on_error = function(e) stop("handler"))
+  cb2 = rtailcat:::rtc_callback(\(x) stop("body"), on_error = \(e) stop("handler"))
   expect_no_error(cb2(1))
   expect_null(cb2(1))
 })
@@ -217,11 +231,22 @@ test_that("a server takes its keys from a tailcat_keys object, with preshared_ke
   for (bad in list(
     structure(list(), class = "tailcat_keys"),
     structure(list(private_key = "x"), class = "tailcat_keys"),
-    structure(list(private_key = keys$private_key, public_key = keys$public_key, preshared_key = NA_character_), class = "tailcat_keys"),
+    structure(
+      list(
+        private_key = keys$private_key,
+        public_key = keys$public_key,
+        preshared_key = NA_character_
+      ),
+      class = "tailcat_keys"
+    ),
     structure("privkey:x", class = "tailcat_keys")
   )) {
     expect_error(TailcatServer$new(key = bad), "tailcat_keys", class = "tailcat_invalid_argument")
-    expect_error(TailcatClient$new(tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)), key = bad), "tailcat_keys", class = "tailcat_invalid_argument")
+    expect_error(
+      TailcatClient$new(tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)), key = bad),
+      "tailcat_keys",
+      class = "tailcat_invalid_argument"
+    )
   }
 })
 
@@ -231,9 +256,17 @@ test_that("choice arguments take the default or exactly one value, for network a
   expect_identical(rtailcat:::check_as(c("raw", "text")), "raw")
   expect_identical(rtailcat:::check_as("text"), "text")
   for (bad in list("TCP", "tc", c("udp", "tcp"), NA_character_, "", 1, character())) {
-    expect_error(rtailcat:::network_code(bad), "`network` must be one of", class = "tailcat_invalid_argument")
+    expect_error(
+      rtailcat:::network_code(bad),
+      "`network` must be one of",
+      class = "tailcat_invalid_argument"
+    )
   }
   for (bad in list("RAW", "t", c("text", "raw"), NA_character_, 1)) {
-    expect_error(rtailcat:::check_as(bad), "`as` must be one of", class = "tailcat_invalid_argument")
+    expect_error(
+      rtailcat:::check_as(bad),
+      "`as` must be one of",
+      class = "tailcat_invalid_argument"
+    )
   }
 })

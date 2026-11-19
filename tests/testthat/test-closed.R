@@ -1,7 +1,10 @@
 expect_closed = function(expr, object) {
   cond = tryCatch(expr, error = identity)
   expect_s3_class(cond, "tailcat_closed")
-  expect_identical(strsplit(conditionMessage(cond), "\n", fixed = TRUE)[[1]][[1]], paste0("The ", object, " is closed."))
+  expect_identical(
+    strsplit(conditionMessage(cond), "\n", fixed = TRUE)[[1]][[1]],
+    paste0("The ", object, " is closed.")
+  )
 }
 
 test_that("every field and info() fails after close, even after earlier reads", {

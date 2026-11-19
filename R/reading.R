@@ -16,7 +16,14 @@ reader_done = function(value) {
 }
 
 reader_failed = function(headline, bytes, bullets = NULL) {
-  list(error = list(status = 5L, headline = headline, bullets = bullets, bytes = byte_total(bytes)))
+  list(
+    error = list(
+      status = status_failure,
+      headline = headline,
+      bullets = bullets,
+      bytes = byte_total(bytes)
+    )
+  )
 }
 
 join_chunks = function(chunks) {
@@ -29,9 +36,9 @@ max_read_size = 65536
 single_reader = function(n = max_read_size) {
   got = 0
   list(
-    start = function() NULL,
-    want = function() n,
-    total = function() got,
+    start = \() NULL,
+    want = \() n,
+    total = \() got,
     feed = function(chunk) {
       got <<- length(chunk)
       reader_done(chunk)
@@ -43,9 +50,9 @@ all_reader = function(max_bytes) {
   chunks = list()
   got = 0
   list(
-    start = function() NULL,
-    want = function() read_all_chunk(max_bytes, got),
-    total = function() got,
+    start = \() NULL,
+    want = \() read_all_chunk(max_bytes, got),
+    total = \() got,
     feed = function(chunk) {
       if (is.null(chunk)) {
         return(reader_done(join_chunks(chunks)))
@@ -65,15 +72,19 @@ exact_reader = function(n) {
   chunks = list()
   got = 0
   list(
-    start = function() if (n == 0) reader_done(raw(0)) else NULL,
-    want = function() min(max_read_size, n - got),
-    total = function() got,
+    start = \() if (n == 0) reader_done(raw(0)) else NULL,
+    want = \() min(max_read_size, n - got),
+    total = \() got,
     feed = function(chunk) {
       if (is.null(chunk)) {
         if (got == 0) {
           return(reader_done(NULL))
         }
-        return(reader_failed(paste0("The stream ended after ", format_count(got), " of ", format_count(n), " bytes."), got, ended_bullets))
+        return(reader_failed(
+          paste0("The stream ended after ", format_count(got), " of ", format_count(n), " bytes."),
+          got,
+          ended_bullets
+        ))
       }
       chunks[[length(chunks) + 1L]] <<- chunk
       got <<- got + length(chunk)
@@ -88,16 +99,26 @@ message_reader = function(max_bytes) {
   body = NULL
   size = NA_real_
   list(
-    start = function() NULL,
+    start = \() NULL,
     want = function() {
       if (is.null(body)) 4 - length(header) else body$want()
     },
-    total = function() length(header) + if (is.null(body)) 0 else body$total(),
+    total = \() length(header) + if (is.null(body)) 0 else body$total(),
     feed = function(chunk) {
       if (!is.null(body)) {
         if (is.null(chunk)) {
           got = body$total()
-          return(reader_failed(paste0("The stream ended after ", format_count(got), " of the message's ", format_count(size), " bytes."), 4 + got, ended_bullets))
+          return(reader_failed(
+            paste0(
+              "The stream ended after ",
+              format_count(got),
+              " of the message's ",
+              format_count(size),
+              " bytes."
+            ),
+            4 + got,
+            ended_bullets
+          ))
         }
         return(body$feed(chunk))
       }
@@ -105,7 +126,11 @@ message_reader = function(max_bytes) {
         if (length(header) == 0) {
           return(reader_done(NULL))
         }
-        return(reader_failed("The stream ended in the middle of a message header.", length(header), ended_bullets))
+        return(reader_failed(
+          "The stream ended in the middle of a message header.",
+          length(header),
+          ended_bullets
+        ))
       }
       header <<- c(header, chunk)
       if (length(header) < 4) {
@@ -115,8 +140,15 @@ message_reader = function(max_bytes) {
       if (size > max_bytes || size > .Machine$integer.max) {
         limit = min(max_bytes, .Machine$integer.max)
         return(reader_failed(
-          paste0("The message is ", format_count(size), " bytes, more than `max_bytes` (", format_count(limit), ")."),
-          4, message_skipped_bullets
+          paste0(
+            "The message is ",
+            format_count(size),
+            " bytes, more than `max_bytes` (",
+            format_count(limit),
+            ")."
+          ),
+          4,
+          message_skipped_bullets
         ))
       }
       if (size == 0) {
@@ -130,7 +162,9 @@ message_reader = function(max_bytes) {
 
 ended_bullets = c(i = "The bytes read were discarded.")
 
-message_skipped_bullets = c(i = "Only the message's length was read; the rest of the stream is the unread message, so close the connection.")
+message_skipped_bullets = c(
+  i = "Only the message's length was read; the rest of the stream is the unread message, so close the connection."
+)
 
 decode_length = function(header) {
   sum(as.double(as.integer(header)) * 256^(3:0))
@@ -171,7 +205,13 @@ start_reader = function(handle, reader, timeout, context, call, done, fail) {
   state$canceled = FALSE
   state$cancel = NULL
   failed = function(result) {
-    fail(rlang::exec(rtc_condition, result, !!!context, bytes = byte_total(reader$total()), call = call))
+    fail(rlang::exec(
+      rtc_condition,
+      result,
+      !!!context,
+      bytes = byte_total(reader$total()),
+      call = call
+    ))
   }
   finish = function(out) {
     if (!is.null(out$error)) {
@@ -185,21 +225,30 @@ start_reader = function(handle, reader, timeout, context, call, done, fail) {
       failed(canceled_error())
       return(invisible())
     }
-    state$cancel = rtc_conn_read(handle, reader$want(), remaining_until(deadline), rtc_callback(
-      function(result) {
-        if (inherits(result, "rtc_error")) {
-          failed(result)
-          return(invisible())
-        }
-        out = reader$feed(result)
-        if (is.null(out)) step() else finish(out)
-      },
-      on_error = fail
-    ))
+    state$cancel = rtc_conn_read(
+      handle,
+      reader$want(),
+      remaining_until(deadline),
+      rtc_callback(
+        function(result) {
+          if (inherits(result, "rtc_error")) {
+            failed(result)
+            return(invisible())
+          }
+          out = reader$feed(result)
+          if (is.null(out)) step() else finish(out)
+        },
+        on_error = fail
+      )
+    )
     invisible()
   }
   out = reader$start()
-  if (is.null(out)) step() else finish(out)
+  if (is.null(out)) {
+    step()
+  } else {
+    finish(out)
+  }
   function() {
     state$canceled = TRUE
     if (!is.null(state$cancel)) {
@@ -211,11 +260,16 @@ start_reader = function(handle, reader, timeout, context, call, done, fail) {
 
 reader_promise = function(handle, reader, timeout, context, call, transform = identity) {
   canceler = NULL
-  p = promises::promise(function(resolve, reject) {
-    canceler <<- start_reader(handle, reader, timeout, context, call,
-      done = function(value) resolve(transform(value)),
+  promise = promises::promise(function(resolve, reject) {
+    canceler <<- start_reader(
+      handle,
+      reader,
+      timeout,
+      context,
+      call,
+      done = \(value) resolve(transform(value)),
       fail = reject
     )
   })
-  with_canceler(p, function() if (!is.null(canceler)) canceler())
+  with_canceler(promise, \() if (!is.null(canceler)) canceler())
 }

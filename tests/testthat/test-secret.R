@@ -54,11 +54,23 @@ test_that("tailcat_keys hide their secrets from print, format, str, and list wal
     outputs = c(outputs, every_display(element))
   }
   expect_hidden(outputs, secrets)
-  expect_match(paste(utils::capture.output(utils::str(keys)), collapse = "\n"), keys$public_key, fixed = TRUE)
-  expect_match(paste(utils::capture.output(utils::str(keys)), collapse = "\n"), "<redacted>", fixed = TRUE)
+  expect_match(
+    paste(utils::capture.output(utils::str(keys)), collapse = "\n"),
+    keys$public_key,
+    fixed = TRUE
+  )
+  expect_match(
+    paste(utils::capture.output(utils::str(keys)), collapse = "\n"),
+    "<redacted>",
+    fixed = TRUE
+  )
 
   # dput() necessarily shows the values; it is the documented way to see them.
-  expect_match(paste(utils::capture.output(dput(keys)), collapse = ""), unclass(keys$private_key), fixed = TRUE)
+  expect_match(
+    paste(utils::capture.output(dput(keys)), collapse = ""),
+    unclass(keys$private_key),
+    fixed = TRUE
+  )
   expect_match(as.character(keys$private_key), "^privkey:")
 })
 
@@ -67,7 +79,10 @@ test_that("secret keys can be passed wherever a key is expected", {
   srv = TailcatServer$new(key = keys$private_key, preshared_key = keys$preshared_key)
   on.exit(srv$close())
   expect_identical(srv$public_key, NA_character_)
-  cl = TailcatClient$new(tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)), key = keys$private_key)
+  cl = TailcatClient$new(
+    tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)),
+    key = keys$private_key
+  )
   on.exit(cl$close(), add = TRUE)
   expect_identical(cl$public_key, keys$public_key)
 })
@@ -120,6 +135,9 @@ test_that("the resolved address is a secret that still works for connecting", {
   resolved = tailcat_address_resolve(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30)
   expect_s3_class(resolved, "tailcat_secret")
   expect_hidden(every_display(resolved), unclass(resolved))
-  resolved_async = wait_for(tailcat_address_resolve_async(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30), 40)
+  resolved_async = wait_for(
+    tailcat_address_resolve_async(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30),
+    40
+  )
   expect_s3_class(resolved_async, "tailcat_secret")
 })

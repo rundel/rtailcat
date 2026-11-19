@@ -18,3 +18,5 @@
 ^pkgdown$
 ^tools/vignette\.R$
 ^tools/vignette-side\.R$
+^air\.toml$
+^\.lintr$

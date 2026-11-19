@@ -16,7 +16,7 @@ wait_for = function(promise, timeout = 30) {
       state$done = TRUE
     }
   )
-  run_until(function() state$done, timeout)
+  run_until(\() state$done, timeout)
   if (!state$done) {
     stop("promise did not settle within ", timeout, " seconds")
   }
@@ -81,7 +81,13 @@ skip_relay = function() {
   }
   # Without this, every remaining network test would wait out its own timeout.
   if (!is.null(test_relay$process) && !test_relay$process$is_alive()) {
-    stop("the local test relay has exited (status ", test_relay$process$get_exit_status(), "); see ", test_relay$log, call. = FALSE)
+    stop(
+      "the local test relay has exited (status ",
+      test_relay$process$get_exit_status(),
+      "); see ",
+      test_relay$log,
+      call. = FALSE
+    )
   }
   if (is.null(relay_region())) {
     testthat::skip_if_offline("tailcat.dev")
@@ -130,7 +136,7 @@ cbor = function(x) {
   parts = if (is.null(names(x))) {
     lapply(x, cbor)
   } else {
-    Map(function(k, v) c(cbor(k), cbor(v)), names(x), x)
+    Map(\(k, v) c(cbor(k), cbor(v)), names(x), x)
   }
   c(cbor_head(if (is.null(names(x))) 4 else 5, length(x)), unlist(parts, use.names = FALSE))
 }
@@ -152,7 +158,11 @@ tc_address = function(fields) {
 tamper_psk = function(address) {
   bytes = base64url_decode(substring(address, 3))
   marker = as.raw(c(0x61, 0x71, 0x58, 0x20))
-  starts = which(vapply(seq_len(length(bytes) - 35), function(i) identical(bytes[i:(i + 3)], marker), logical(1)))
+  starts = which(vapply(
+    seq_len(length(bytes) - 35),
+    \(i) identical(bytes[i:(i + 3)], marker),
+    logical(1)
+  ))
   stopifnot(length(starts) == 1)
   idx = starts + 4:35
   repeat {
@@ -178,8 +188,11 @@ child_r = function(code) {
     "derp_map_url = if (is.null(region)) NULL else 'none'"
   )
   processx::process$new(
-    file.path(R.home("bin"), "Rscript"), c("-e", paste(c(load, setup, code), collapse = "\n")),
-    stdout = "|", stderr = "|", cleanup = TRUE
+    file.path(R.home("bin"), "Rscript"),
+    c("-e", paste(c(load, setup, code), collapse = "\n")),
+    stdout = "|",
+    stderr = "|",
+    cleanup = TRUE
   )
 }
 
@@ -213,14 +226,17 @@ silent_sockets = new.env(parent = emptyenv())
 
 silent_map_url = function(env = parent.frame()) {
   for (port in sample(20000:45000, 20)) {
-    sock = tryCatch(serverSocket(port), error = function(e) NULL)
+    sock = tryCatch(serverSocket(port), error = \(e) NULL)
     if (!is.null(sock)) {
       key = as.character(port)
       silent_sockets[[key]] = sock
-      withr::defer({
-        close(silent_sockets[[key]])
-        rm(list = key, envir = silent_sockets)
-      }, envir = env)
+      withr::defer(
+        {
+          close(silent_sockets[[key]])
+          rm(list = key, envir = silent_sockets)
+        },
+        envir = env
+      )
       return(paste0("http://127.0.0.1:", port, "/derpmap.json"))
     }
   }

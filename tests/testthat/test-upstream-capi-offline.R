@@ -37,7 +37,8 @@ test_that("an unused client reports its public key and drains without network ac
 })
 
 test_that("a zero timeout polls and fails at once with tailcat_timeout when nothing is ready", {
-  # from cmd/libtailcat/tailcat.h: tc_token_new (0 expires immediately), internal/capi/token_test.go; rtailcat polls with a few milliseconds instead
+  # from cmd/libtailcat/tailcat.h: tc_token_new (0 expires immediately),
+  # internal/capi/token_test.go; rtailcat polls with a few milliseconds instead
   map_url = silent_map_url()
   cl = TailcatClient$new(offline_address(), derp_map_url = map_url)
   on.exit(cl$close())
@@ -58,27 +59,50 @@ test_that("configuration errors never echo the secret that was rejected", {
     conditionMessage(tryCatch(TailcatServer$new(preshared_key = secret), error = identity)),
     conditionMessage(tryCatch(TailcatServer$new(allowed_clients = secret), error = identity)),
     conditionMessage(tryCatch(TailcatClient$new(secret_address), error = identity)),
-    conditionMessage(tryCatch(TailcatClient$new(offline_address(), key = secret), error = identity)),
+    conditionMessage(tryCatch(
+      TailcatClient$new(offline_address(), key = secret),
+      error = identity
+    )),
     conditionMessage(tryCatch(tailcat_address_parse(secret_address), error = identity)),
-    conditionMessage(tryCatch(tailcat_address_resolve(secret_address, timeout = 1), error = identity))
+    conditionMessage(tryCatch(
+      tailcat_address_resolve(secret_address, timeout = 1),
+      error = identity
+    ))
   )
   for (msg in messages) {
     expect_false(grepl("supersecret", msg, fixed = TRUE))
   }
-  expect_error(TailcatServer$new(key = secret), "invalid private key", class = "tailcat_invalid_argument")
-  expect_error(TailcatServer$new(preshared_key = secret), "invalid pre-shared key", class = "tailcat_invalid_argument")
-  expect_error(TailcatClient$new(offline_address(), key = secret), class = "tailcat_invalid_argument")
+  expect_error(
+    TailcatServer$new(key = secret),
+    "invalid private key",
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    TailcatServer$new(preshared_key = secret),
+    "invalid pre-shared key",
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    TailcatClient$new(offline_address(), key = secret),
+    class = "tailcat_invalid_argument"
+  )
 })
 
 test_that("an unstarted server accepts allowlist additions and a zero UDP idle timeout", {
-  # from internal/capi/api_test.go: TestAllowClientKeepsAllowlistSemantics (before startup); tailcat_test.go: TestUDPIdleTimeoutDefault
+  # from internal/capi/api_test.go: TestAllowClientKeepsAllowlistSemantics (before startup);
+  # tailcat_test.go: TestUDPIdleTimeoutDefault
   srv = TailcatServer$new(udp_idle_timeout = 0)
   on.exit(srv$close())
   expect_identical(srv$allow_client(tailcat_keygen()$public_key, timeout = 5), srv)
-  expect_identical(wait_for(srv$allow_client_async(tailcat_keygen()$public_key, timeout = 5), 10), srv)
+  expect_identical(
+    wait_for(srv$allow_client_async(tailcat_keygen()$public_key, timeout = 5), 10),
+    srv
+  )
   expect_identical(srv$public_key, NA_character_)
 
-  listed = TailcatServer$new(allowed_clients = c(tailcat_keygen()$public_key, tailcat_keygen()$public_key))
+  listed = TailcatServer$new(
+    allowed_clients = c(tailcat_keygen()$public_key, tailcat_keygen()$public_key)
+  )
   on.exit(listed$close(), add = TRUE)
   expect_identical(listed$allow_client(tailcat_keygen()$public_key), listed)
 })

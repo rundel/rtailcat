@@ -448,6 +448,27 @@ the owner’s decision there are no R-side workarounds.
 - Changing an `rtc_*` signature requires rerunning
   [`cpp11::cpp_register()`](https://cpp11.r-lib.org/reference/cpp_register.html)
   and updating the R6 callers together.
+- R code style is the tidyverse style guide with `=` for assignment,
+  never `<-` (`<<-` only where a closure must assign to an enclosing
+  variable; an assignment inside a call’s argument is written
+  `{ x = value }`). `air.toml` (line width 100,
+  `assignment-style = "equal"`) and `.lintr` enforce it: run
+  `air format R tests tools inst/examples` (Air ships with Positron’s
+  Air extension) and `lintr::lint_package()` after editing R code; both
+  should come back clean. Air skips the generated `R/cpp11.R`. Long
+  message strings and roxygen paragraphs are not wrapped, so the line
+  length linter is off. One-line anonymous functions use `\(x)`. The
+  vignette’s code cells are not formatted by Air; keep them in the style
+  Air gives `inst/examples/`.
+- Argument checks live in `R/checks.R` and build on its scalar
+  predicates (`is_string()`, `is_nonempty_string()`, `is_number()`,
+  `is_whole()`); `call` arguments default to
+  [`rlang::caller_env()`](https://rlang.r-lib.org/reference/stack.html).
+  Status and network codes are named constants (`status_*` in
+  `R/errors.R`, `network_tcp` and `network_udp` in `R/utils.R`), as are
+  the timeouts fields and `$format()` use (`field_timeout`,
+  `format_timeout`). Deferred warnings from callbacks have class
+  `tailcat_warning`, like the secret-file warnings.
 - Use American spelling in identifiers and docs (canceled, not
   cancelled), even though the upstream C ABI spells its constant
   `TC_CANCELLED`.

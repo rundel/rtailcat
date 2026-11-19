@@ -152,7 +152,7 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>      <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">payload</span>, timeout <span class="op">=</span> <span class="va">timeout</span><span class="op">)</span></span>
 <span>      <span class="va">conn</span><span class="op">$</span><span class="fu">read_message</span><span class="op">(</span>timeout <span class="op">=</span> <span class="va">timeout</span>, as <span class="op">=</span> <span class="st">"text"</span>, max_bytes <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span>
 <span>    <span class="op">}</span>,</span>
-<span>    tailcat_failure <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
+<span>    tailcat_failure <span class="op">=</span> \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
 <span>  <span class="op">)</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">reply</span>, <span class="st">"ok"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_abort</a></span><span class="op">(</span><span class="st">"The receiver did not confirm the transfer."</span><span class="op">)</span></span>
@@ -178,7 +178,9 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="co"># the sender, so a refused transfer does not leave the sender waiting</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span></span>
 <span>    <span class="op">{</span></span>
-<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">conn</span><span class="op">)</span><span class="op">)</span> <span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">conn</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
+<span>      <span class="op">}</span></span>
 <span>      <span class="va">cl</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span>    <span class="op">}</span>,</span>
 <span>    add <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -506,8 +508,14 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <div class="cell">
 <div class="sourceCode cell-code" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">proxy_drop_headers</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>  <span class="st">"connection"</span>, <span class="st">"keep-alive"</span>, <span class="st">"transfer-encoding"</span>, <span class="st">"content-length"</span>, <span class="st">"host"</span>, <span class="st">"upgrade"</span>,</span>
-<span>  <span class="st">"accept-encoding"</span>, <span class="st">"content-encoding"</span></span>
+<span>  <span class="st">"connection"</span>,</span>
+<span>  <span class="st">"keep-alive"</span>,</span>
+<span>  <span class="st">"transfer-encoding"</span>,</span>
+<span>  <span class="st">"content-length"</span>,</span>
+<span>  <span class="st">"host"</span>,</span>
+<span>  <span class="st">"upgrade"</span>,</span>
+<span>  <span class="st">"accept-encoding"</span>,</span>
+<span>  <span class="st">"content-encoding"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">proxy_clean_headers</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">lines</span><span class="op">)</span> <span class="op">{</span></span>

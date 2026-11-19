@@ -91,6 +91,7 @@ test_that("read_exact() reads exactly n bytes across chunks and returns NULL at 
   expect_match(conditionMessage(cond), "trying to read 5 bytes", fixed = TRUE)
 
   pair$client$write("defgh")
+  expect_true(run_until(function() pair$server$readable(), 20))
   expect_identical(pair$server$read_exact(5, timeout = 0, as = "text"), "defgh")
   expect_error(pair$server$read_exact(1, timeout = 0), class = "tailcat_timeout")
 

@@ -93,8 +93,8 @@ test_that("an idle UDP flow ends on the server after udp_idle_timeout, unless ke
   expect_identical(fresh$remote_address, pair$client$local_address)
 })
 
-test_that("a zero-byte UDP read fails and drops the datagram (upstream bug, pinned)", {
-  # from cmd/libtailcat/tailcat.h: tc_conn_read (UDP truncates to capacity; capacity zero allowed)
+test_that("a zero-byte UDP read consumes one datagram and returns no bytes", {
+  # from cmd/libtailcat/tailcat.h: tc_conn_read (a zero-capacity UDP read consumes one datagram and succeeds with count zero)
   skip_relay()
   srv = relay_server()
   lst = srv$listen(0, network = "udp")
@@ -102,7 +102,10 @@ test_that("a zero-byte UDP read fails and drops the datagram (upstream bug, pinn
   pair = connect_pair(lst, cl, lst$port, network = "udp")
   pair$client$write("dropped")
   pair$client$write("kept")
-  # TODO: waiting on an upstream fix (notes/upstream_issues.md, Known issues in CLAUDE.md). tailcat's capi passes the empty buffer to gVisor, which fails with "bad buffer" (tailcat_failure) and still discards the datagram. This pins today's behavior so the test fails once the pinned tailcat commit includes a fix; then update the expectations below to whatever upstream settled on. tailcat.h does not define a zero-capacity UDP read, so the fix may be a no-op like TCP (read(n = 0) returns raw(0) at once and the next read returns "dropped"), truncation to zero bytes (read(n = 0) returns raw(0) and consumes "dropped"), or a rejection that leaves the datagram in place (an invalid argument error, and the next read returns "dropped").
-  expect_error(pair$server$read(n = 0, timeout = 20), "bad buffer", class = "tailcat_failure")
+  expect_identical(pair$server$read(n = 0, timeout = 20), raw(0))
+  expect_identical(rawToChar(pair$server$read(timeout = 20)), "kept")
+  pair$client$write("dropped")
+  pair$client$write("kept")
+  expect_identical(pair$server$read(n = 0, timeout = 20, as = "text"), "")
   expect_identical(rawToChar(pair$server$read(timeout = 20)), "kept")
 })

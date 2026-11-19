@@ -4,7 +4,7 @@ tailcat, tailscale.com, and the tailcat C ABI header (tailcat.h)
   Copyright (c) Tailscale Inc & contributors
   BSD 3-Clause License
 
-Go runtime and standard library, golang.org/x/{crypto,exp,net,sync,sys,term,text,time}, github.com/google/go-cmp, github.com/go-json-experiment/json, github.com/kr/fs, github.com/klauspost/compress, filippo.io/edwards25519, github.com/hdevalence/ed25519consensus
+Go runtime and standard library, golang.org/x/{crypto,exp,net,sync,sys,term,text,time}, github.com/google/go-cmp, github.com/go-json-experiment/json, github.com/kr/fs, github.com/klauspost/compress, filippo.io/edwards25519, github.com/hdevalence/ed25519consensus, github.com/alexbrainman/sspi (Windows only)
   Copyright The Go Authors and respective contributors
   BSD 3-Clause License
 

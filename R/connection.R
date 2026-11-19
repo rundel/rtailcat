@@ -51,7 +51,7 @@ TailcatConnection = R6::R6Class(
       invisible(self)
     },
 
-    #' @description Read up to `n` bytes (TCP) or one datagram (UDP, truncated to `n` bytes). One call returns at most 65536 bytes whatever the value of `n` (TCP reads may return less than requested anyway, and UDP datagrams are much smaller), so loop, or use `$read_all()`, to read more. A timeout ends only this read; the connection stays usable. With `timeout = 0` the read returns data (or the end of stream) that has already arrived, and otherwise raises `tailcat_timeout` at once. A TCP read returns whatever has arrived, so with `as = "text"` a multibyte UTF-8 character can be split across two reads; for multibyte text use `$read_all()`, or read raw bytes and convert them once. On UDP, `n = 0` is not supported: because of an upstream tailcat bug it fails and the datagram is lost.
+    #' @description Read up to `n` bytes (TCP) or one datagram (UDP, truncated to `n` bytes). One call returns at most 65536 bytes whatever the value of `n` (TCP reads may return less than requested anyway, and UDP datagrams are much smaller), so loop, or use `$read_all()`, to read more. A timeout ends only this read; the connection stays usable. With `timeout = 0` the read returns data (or the end of stream) that has already arrived, and otherwise raises `tailcat_timeout` at once. A TCP read returns whatever has arrived, so with `as = "text"` a multibyte UTF-8 character can be split across two reads; for multibyte text use `$read_all()`, or read raw bytes and convert them once. On UDP, `n = 0` consumes one datagram and returns no bytes; on TCP it returns at once without reading.
     #' @param n Maximum number of bytes to return (at most 65536 are returned).
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
     #' @param as Exactly `"raw"` (the default) to return a raw vector, or `"text"` to return a single string marked as UTF-8 (the bytes are not checked for valid UTF-8). Data containing NUL bytes cannot be returned as text and raises a `tailcat_invalid_argument` error; the data is consumed, so read binary data with `as = "raw"`.
@@ -304,7 +304,7 @@ TailcatConnection = R6::R6Class(
       invisible(self)
     },
 
-    #' @description Format a summary, the lines that `$print()` shows. An open connection shows its local and remote endpoints on the tailcat network (not secrets); they are left out when the connection is closed, when tailcat cannot report them, and once `$close_write()` has succeeded on it, because asking tailcat after both sides have shut down their writes triggers an upstream bug that prints a Go stack trace.
+    #' @description Format a summary, the lines that `$print()` shows. An open connection shows its local and remote endpoints on the tailcat network (not secrets); they are left out when the connection is closed, when tailcat cannot report them, and once `$close_write()` has succeeded on it.
     #' @param ... Ignored.
     #' @return A character vector.
     format = function(...) {

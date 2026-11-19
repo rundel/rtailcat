@@ -110,7 +110,7 @@ conn$read_all(timeout = 10, as = "text")
 \if{html}{\out{<a id="method-TailcatConnection-read"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatConnection-read}{}}}
 \subsection{\code{TailcatConnection$read()}}{
-  Read up to \code{n} bytes (TCP) or one datagram (UDP, truncated to \code{n} bytes). One call returns at most 65536 bytes whatever the value of \code{n} (TCP reads may return less than requested anyway, and UDP datagrams are much smaller), so loop, or use \verb{$read_all()}, to read more. A timeout ends only this read; the connection stays usable. With \code{timeout = 0} the read returns data (or the end of stream) that has already arrived, and otherwise raises \code{tailcat_timeout} at once. A TCP read returns whatever has arrived, so with \code{as = "text"} a multibyte UTF-8 character can be split across two reads; for multibyte text use \verb{$read_all()}, or read raw bytes and convert them once. On UDP, \code{n = 0} is not supported: because of an upstream tailcat bug it fails and the datagram is lost.
+  Read up to \code{n} bytes (TCP) or one datagram (UDP, truncated to \code{n} bytes). One call returns at most 65536 bytes whatever the value of \code{n} (TCP reads may return less than requested anyway, and UDP datagrams are much smaller), so loop, or use \verb{$read_all()}, to read more. A timeout ends only this read; the connection stays usable. With \code{timeout = 0} the read returns data (or the end of stream) that has already arrived, and otherwise raises \code{tailcat_timeout} at once. A TCP read returns whatever has arrived, so with \code{as = "text"} a multibyte UTF-8 character can be split across two reads; for multibyte text use \verb{$read_all()}, or read raw bytes and convert them once. On UDP, \code{n = 0} consumes one datagram and returns no bytes; on TCP it returns at once without reading.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{TailcatConnection$read(n = 65536L, timeout = Inf, as = c("raw", "text"))}
@@ -581,7 +581,7 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
 \if{html}{\out{<a id="method-TailcatConnection-format"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatConnection-format}{}}}
 \subsection{\code{TailcatConnection$format()}}{
-  Format a summary, the lines that \verb{$print()} shows. An open connection shows its local and remote endpoints on the tailcat network (not secrets); they are left out when the connection is closed, when tailcat cannot report them, and once \verb{$close_write()} has succeeded on it, because asking tailcat after both sides have shut down their writes triggers an upstream bug that prints a Go stack trace.
+  Format a summary, the lines that \verb{$print()} shows. An open connection shows its local and remote endpoints on the tailcat network (not secrets); they are left out when the connection is closed, when tailcat cannot report them, and once \verb{$close_write()} has succeeded on it.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{TailcatConnection$format(...)}

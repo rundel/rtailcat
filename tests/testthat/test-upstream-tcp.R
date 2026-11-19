@@ -165,12 +165,12 @@ test_that("dialing a TCP port nobody listens on fails fast instead of hanging", 
   expect_identical(rawToChar(pair$server$read(timeout = 20)), "ok")
 })
 
-test_that("info() after both sides half-close panics inside tailcat (upstream bug, pinned)", {
+test_that("info() and the address fields still work after both sides half-close", {
   # from cmd/libtailcat/tailcat.h: tc_info (connection: local_address, remote_address, network)
   skip_relay()
   skip_if_not_installed("processx")
-  # Run in a child process: the Go runtime prints the panic's stack trace to
-  # standard error, which would otherwise clutter the test output.
+  # Run in a child process to capture the Go runtime's standard error: tailcat
+  # used to panic here, once gVisor's endpoint left the connected state.
   child = child_r(c(
     "srv = TailcatServer$new(region = region)",
     "lst = srv$listen(0)",
@@ -185,9 +185,14 @@ test_that("info() after both sides half-close panics inside tailcat (upstream bu
     "stopifnot(is.null(sc$read(timeout = 20)))",
     "sc$close_write()",
     "stopifnot(is.null(cc$read(timeout = 20)))",
-    "deadline = Sys.time() + 10",
+    "deadline = Sys.time() + 3",
     "repeat {",
-    "  res = tryCatch({ sc$info(timeout = 5); 'ok' }, error = function(e) paste(class(e)[1], conditionMessage(e)))",
+    "  res = tryCatch({",
+    "    info = sc$info(timeout = 5)",
+    "    stopifnot(identical(info$local_address, sc$local_address), identical(info$remote_address, sc$remote_address))",
+    "    stopifnot(identical(sc$remote_address, cc$local_address), identical(sc$local_address, cc$remote_address))",
+    "    'ok'",
+    "  }, error = function(e) paste(class(e)[1], conditionMessage(e)))",
     "  if (res != 'ok' || Sys.time() > deadline) break",
     "  Sys.sleep(0.1)",
     "}",
@@ -200,7 +205,6 @@ test_that("info() after both sides half-close panics inside tailcat (upstream bu
   stdout = gsub("[[:space:]]+", " ", paste(out$stdout, collapse = " "))
   result = regmatches(stdout, regexpr("RESULT .*$", stdout))
   expect_length(result, 1)
-  # TODO: waiting on an upstream fix (notes/upstream_issues.md, Known issues in CLAUDE.md). Once both directions are shut down, gVisor's TCPConn.RemoteAddr() returns nil and tailcat's Info() dereferences it; the guard recovers the panic and returns TC_FAILURE. When the pinned tailcat commit includes a fix, this test fails: change it to expect "RESULT ok" and an empty standard error.
-  expect_match(result, "tailcat_failure .*nil pointer dereference")
-  expect_true(any(grepl("libtailcat: internal failure", out$stderr, fixed = TRUE)))
+  expect_match(result, "RESULT ok")
+  expect_false(any(grepl("libtailcat: internal failure|panic|goroutine", out$stderr)))
 })

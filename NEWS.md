@@ -22,8 +22,3 @@ Initial version, embedding tailcat's Go library through its C ABI (version 1).
 - `timeout = 0` is a non-blocking poll (data already received, a connection already waiting) rather than an already expired deadline.
 - `TailcatClient$ping()` returns seconds rather than milliseconds, like `$disco_ping()` and the timeouts.
 - Field names in the results of `$info()`, `$disco_ping()`, and `tailcat_address_parse()` are snake_case (`relay_port`, `relay_region_id`, and so on) instead of tailcat's JSON names; `tailcat_build_info()$raw` keeps Go's own names.
-
-## Known upstream issues
-
-- On a UDP connection `$read(n = 0)` fails with `tailcat_failure` and discards the waiting datagram.
-- On a TCP connection whose two directions have both been shut down (both sides called `$close_write()`), `$info()`, `$local_address`, and `$remote_address` fail with `tailcat_failure` and tailcat prints a Go stack trace. Printing such a connection leaves the endpoints out instead.

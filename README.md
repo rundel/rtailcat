@@ -1,4 +1,4 @@
-# rtailcat
+# rtailcat <a href="https://rundel.github.io/rtailcat/"><img src="man/figures/logo.png" align="right" height="138" alt="rtailcat website" /></a>
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/rundel/rtailcat/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/rundel/rtailcat/actions/workflows/R-CMD-check.yaml)

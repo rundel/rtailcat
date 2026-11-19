@@ -20,3 +20,4 @@
 ^tools/vignette-side\.R$
 ^air\.toml$
 ^\.lintr$
+^logo$

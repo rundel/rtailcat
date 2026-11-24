@@ -1,6 +1,6 @@
 # The tailcat commit the package is built against. tools/update-tailcat.sh
 # rewrites this line when it moves the pin in src/go/go.mod.
-tailcat_commit = "c14b171db436062b86e95aa09e5792d1d1fd90f1"
+tailcat_commit = "b9491c13c63925af4119aca70bd21b1691ff3d5b"
 
 tailcat_header_url = paste0(
   "https://github.com/tailscale/tailcat/blob/",

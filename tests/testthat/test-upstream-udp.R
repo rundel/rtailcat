@@ -62,7 +62,7 @@ test_that("datagrams to a UDP port nobody listens on are silently dropped", {
   cl = relay_client(srv$address)
   unused = if (lst$port == 65535L) 65534L else lst$port + 1L
   conn = cl$dial(unused, network = "udp", timeout = 30)
-  expect_identical(conn$write("drop me"), 7L)
+  expect_identical(conn$write("drop me"), conn)
   expect_error(conn$read(timeout = 0.5), class = "tailcat_timeout")
   expect_error(lst$accept(timeout = 0.2), class = "tailcat_timeout")
 })

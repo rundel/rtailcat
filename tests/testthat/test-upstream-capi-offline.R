@@ -40,7 +40,7 @@ test_that("a zero timeout polls and fails at once with tailcat_timeout when noth
   # from cmd/libtailcat/tailcat.h: tc_token_new (0 expires immediately),
   # internal/capi/token_test.go; rtailcat polls with a few milliseconds instead
   map_url = silent_map_url()
-  cl = TailcatClient$new(offline_address(), derp_map_url = map_url)
+  cl = TailcatClient$new(offline_address(), relay_map_url = map_url)
   on.exit(cl$close())
   started = Sys.time()
   expect_error(cl$dial(80, timeout = 0), class = "tailcat_timeout")
@@ -98,7 +98,7 @@ test_that("an unstarted server accepts allowlist additions and a zero UDP idle t
     wait_for(srv$allow_client_async(tailcat_keygen()$public_key, timeout = 5), 10),
     srv
   )
-  expect_identical(srv$public_key, NA_character_)
+  expect_error(srv$public_key, "not started", class = "tailcat_invalid_argument")
 
   listed = TailcatServer$new(
     allowed_clients = c(tailcat_keygen()$public_key, tailcat_keygen()$public_key)

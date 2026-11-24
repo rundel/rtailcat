@@ -29,8 +29,8 @@ Both run the current later loop (\code{\link[later:current_loop]{later::current_
 }
 \examples{
 \dontrun{
-cli = TailcatClient$new(address)
-conn = tailcat_wait(cli$dial_async(8080), timeout = 30)
+cl = TailcatClient$new(address)
+conn = tailcat_wait(cl$dial_async(8080), timeout = 30)
 
 srv = TailcatServer$new()
 lst = srv$listen(8080)

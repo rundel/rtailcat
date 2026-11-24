@@ -6,6 +6,11 @@ test_that("build info reports ABI version 1", {
   expect_named(info, c("abi_version", "go_version", "tailcat_version", "raw"))
   expect_type(info$raw, "list")
   expect_identical(info$raw$GoVersion, info$go_version)
+  expect_s3_class(info, "tailcat_build_info")
+  out = utils::capture.output(print(info))
+  expect_identical(out, format(info))
+  expect_length(out, 5)
+  expect_match(out[[2]], info$tailcat_version, fixed = TRUE)
 })
 
 test_that("keygen returns distinct keys and redacts secrets when printed", {
@@ -97,9 +102,38 @@ test_that("server configuration is validated", {
     udp_idle_timeout = 10
   )
   on.exit(srv$close())
-  expect_identical(srv$public_key, NA_character_)
+  expect_error(srv$public_key, "not started", class = "tailcat_invalid_argument")
   expect_false(srv$is_started)
   expect_false(srv$is_closed)
+})
+
+test_that("allowed_clients and allow_client() take tailcat_keys objects", {
+  keys = tailcat_keygen()
+  srv = TailcatServer$new(allowed_clients = keys)
+  on.exit(srv$close())
+  mixed = TailcatServer$new(allowed_clients = list(keys, tailcat_keygen()$public_key))
+  on.exit(mixed$close(), add = TRUE)
+  expect_error(
+    TailcatServer$new(allowed_clients = list(keys, 1)),
+    "allowed_clients",
+    class = "tailcat_invalid_argument"
+  )
+  incomplete = structure(list(private_key = "x"), class = "tailcat_keys")
+  expect_error(
+    TailcatServer$new(allowed_clients = incomplete),
+    "without a public key",
+    class = "tailcat_invalid_argument"
+  )
+  expect_error(
+    srv$allow_client(incomplete),
+    "without a public key",
+    class = "tailcat_invalid_argument"
+  )
+  expect_identical(
+    rtailcat:::check_allowed_clients(list(keys, "nodekey:abc")),
+    c(keys$public_key, "nodekey:abc")
+  )
+  expect_identical(rtailcat:::check_public_key(keys), keys$public_key)
 })
 
 test_that("client configuration is validated", {
@@ -115,9 +149,9 @@ test_that("listeners and connections cannot be created directly", {
 
 test_that("an unstarted server reports its state without network access", {
   map_url = silent_map_url()
-  srv = TailcatServer$new(derp_map_url = map_url)
+  srv = TailcatServer$new(relay_map_url = map_url)
   on.exit(srv$close())
-  expect_identical(srv$public_key, NA_character_)
+  expect_error(srv$public_key, "not started", class = "tailcat_invalid_argument")
   expect_false(srv$is_started)
   expect_error(srv$address, class = "tailcat_invalid_argument")
   expect_error(srv$info(), class = "tailcat_invalid_argument")

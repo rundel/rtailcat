@@ -33,9 +33,9 @@
 #' Every operation that can block (each method or function with a `timeout`, and fields such as `$address` that ask tailcat), synchronous or asynchronous, holds its own operating system thread from the moment it starts until it ends, including while it waits its turn behind other reads or writes on a connection. The option `rtailcat.max_operations` caps how many such operations may be in flight in the R process at once. It must be a single positive whole number, or `Inf` for no cap, and defaults to 1024, which stays well below the per-process thread limits of macOS (about 6,000) and typical Linux systems and the 10,000 threads at which the Go runtime ends the process. The option is read each time an operation starts. An operation started when the cap is reached fails at once with a `tailcat_failure` error that names the option and gives the limit, without affecting the operations already in flight; once some of them finish or are canceled, new operations work again. If the option is set to an invalid value, every such operation fails with a `tailcat_failure` error saying so.
 #'
 #' @section Relay options:
-#' The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every `$new()` (including calls inside other packages' code). The option `rtailcat.region` is used by `TailcatServer$new()` when `region` is `NULL`, and `rtailcat.derp_map_url` by `TailcatServer$new()`, `TailcatClient$new()`, and [tailcat_address_resolve()] when `derp_map_url` is `NULL`. They take the same values as the arguments, are read when the object is created, and are ignored when unset (`NULL`, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
+#' The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every `$new()` (including calls inside other packages' code). The option `rtailcat.region` is used by `TailcatServer$new()` when `region` is `NULL`, and `rtailcat.relay_map_url` by `TailcatServer$new()`, `TailcatClient$new()`, and [tailcat_address_resolve()] when `relay_map_url` is `NULL`. They take the same values as the arguments, are read when the object is created, and are ignored when unset (`NULL`, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
 #'
-#' For example, a deployment that runs its own relay region can call `options(rtailcat.region = region)` at startup, and one that publishes its own relay map `options(rtailcat.derp_map_url = url)`.
+#' For example, a deployment that runs its own relay region can call `options(rtailcat.region = region)` at startup, and one that publishes its own relay map `options(rtailcat.relay_map_url = url)`.
 #'
 #' @examples
 #' \dontrun{
@@ -56,15 +56,15 @@ TailcatServer = R6::R6Class(
     #' @param preshared_key Pre-shared key (text encoding), or `NULL` to generate one (or take it from `key`).
     #' @param region_id Integer relay region to register in, or `NULL` to choose automatically.
     #' @param region A relay region definition, as a list or a JSON string, to use instead of the public relay map, or `NULL` to use the `rtailcat.region` option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by [tailcat_address_parse()] (`region_id`, `region_code`, `nodes`, and within each node `name`, `host_name`, `ipv4`, `relay_port`, and so on) or the PascalCase names of Tailscale's `DERPRegion` type (`RegionID`, `Nodes`, `HostName`, `DERPPort`, and so on).
-    #' @param derp_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.derp_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
-    #' @param allowed_clients Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.
+    #' @param relay_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.relay_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
+    #' @param allowed_clients The clients that may connect: a character vector of client public keys, a `tailcat_keys` object from [tailcat_keygen()] (whose public key is used), or a list of public keys and `tailcat_keys` objects. If given, only these clients may connect; otherwise anyone with the address may.
     #' @param udp_idle_timeout Seconds after which an idle UDP flow is dropped, or `NULL` for the default.
     initialize = function(
       key = NULL,
       preshared_key = NULL,
       region_id = NULL,
       region = NULL,
-      derp_map_url = NULL,
+      relay_map_url = NULL,
       allowed_clients = NULL,
       udp_idle_timeout = NULL
     ) {
@@ -98,15 +98,9 @@ TailcatServer = R6::R6Class(
           call = call
         )
       }
-      config$derp_map_url = check_derp_map_url(derp_map_url, call = call)
+      config$derp_map_url = check_relay_map_url(relay_map_url, call = call)
       if (!is.null(allowed_clients)) {
-        if (!is.character(allowed_clients) || anyNA(allowed_clients)) {
-          abort_invalid(
-            "{.arg allowed_clients} must be a character vector of public keys.",
-            call = call
-          )
-        }
-        config$allowed_clients = I(enc2utf8(allowed_clients))
+        config$allowed_clients = I(check_allowed_clients(allowed_clients, call = call))
       }
       if (!is.null(udp_idle_timeout)) {
         config$udp_idle_timeout = check_timeout(udp_idle_timeout, "udp_idle_timeout", call = call)
@@ -186,11 +180,11 @@ TailcatServer = R6::R6Class(
     },
 
     #' @description Add a client public key to the allowlist. Once the list has an entry, only listed clients can register; existing connections are not affected.
-    #' @param public_key A client public key, for example `TailcatClient$public_key`.
+    #' @param public_key A client public key, for example `TailcatClient$public_key`, or the client's `tailcat_keys` object from [tailcat_keygen()], whose public key is used.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
     #' @return The server, invisibly.
     allow_client = function(public_key, timeout = 30) {
-      public_key = check_string(public_key, "public_key")
+      public_key = check_public_key(public_key)
       timeout = check_timeout(timeout)
       private$check(
         rtc_server_allow_client(private$handle, public_key, timeout, NULL),
@@ -202,11 +196,11 @@ TailcatServer = R6::R6Class(
     },
 
     #' @description Asynchronous version of `$allow_client()`.
-    #' @param public_key A client public key.
+    #' @param public_key A client public key or `tailcat_keys` object, as for `$allow_client()`.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
     #' @return A promise resolving with the server.
     allow_client_async = function(public_key, timeout = 30) {
-      public_key = check_string(public_key, "public_key")
+      public_key = check_public_key(public_key)
       timeout = check_timeout(timeout)
       private$promise(
         \(callback) rtc_server_allow_client(private$handle, public_key, timeout, callback),
@@ -317,11 +311,10 @@ TailcatServer = R6::R6Class(
       private$read_only("address", value)
       private$field_info("address", "get the server's address")$address
     },
-    #' @field public_key The server's public key, or `NA` before the server has started.
+    #' @field public_key The server's public key. Errors if the server has not started, like `$address`; test `$is_started` first when that is in doubt.
     public_key = function(value) {
       private$read_only("public_key", value)
-      info = private$field_info("public_key", "get the server's public key", started_only = FALSE)
-      if (is.null(info)) NA_character_ else info$public_key
+      private$field_info("public_key", "get the server's public key")$public_key
     },
     #' @field is_started `TRUE` once the server has started (registered with the relay), `FALSE` before.
     is_started = function(value) {

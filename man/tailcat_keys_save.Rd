@@ -17,7 +17,7 @@ tailcat_keys_load(path)
 \item{overwrite}{\code{TRUE} to replace an existing file. The default, \code{FALSE}, raises an error instead, so keys in use are not lost by accident.}
 }
 \value{
-\code{tailcat_keys_save()} returns \code{path}, invisibly. \code{tailcat_keys_load()} returns a \code{tailcat_keys} object, as \code{\link[=tailcat_keygen]{tailcat_keygen()}} does.
+\code{tailcat_keys_save()} returns \code{keys}, invisibly, so it can end a pipeline that creates them. \code{tailcat_keys_load()} returns a \code{tailcat_keys} object, as \code{\link[=tailcat_keygen]{tailcat_keygen()}} does.
 }
 \description{
 \code{tailcat_keys_save()} writes keys from \code{\link[=tailcat_keygen]{tailcat_keygen()}} to a file that only the current user can read, and \code{tailcat_keys_load()} reads them back. Together they give a server a stable address, or a client a stable public key, across R sessions. \code{tailcat_keygen(path)} combines the two: it loads the keys from \code{path} if the file exists and otherwise generates keys and saves them there.

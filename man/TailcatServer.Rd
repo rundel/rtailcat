@@ -43,9 +43,9 @@ Every operation that can block (each method or function with a \code{timeout}, a
 
 \section{Relay options}{
 
-The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every \verb{$new()} (including calls inside other packages' code). The option \code{rtailcat.region} is used by \code{TailcatServer$new()} when \code{region} is \code{NULL}, and \code{rtailcat.derp_map_url} by \code{TailcatServer$new()}, \code{TailcatClient$new()}, and \code{\link[=tailcat_address_resolve]{tailcat_address_resolve()}} when \code{derp_map_url} is \code{NULL}. They take the same values as the arguments, are read when the object is created, and are ignored when unset (\code{NULL}, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
+The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every \verb{$new()} (including calls inside other packages' code). The option \code{rtailcat.region} is used by \code{TailcatServer$new()} when \code{region} is \code{NULL}, and \code{rtailcat.relay_map_url} by \code{TailcatServer$new()}, \code{TailcatClient$new()}, and \code{\link[=tailcat_address_resolve]{tailcat_address_resolve()}} when \code{relay_map_url} is \code{NULL}. They take the same values as the arguments, are read when the object is created, and are ignored when unset (\code{NULL}, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.
 
-For example, a deployment that runs its own relay region can call \code{options(rtailcat.region = region)} at startup, and one that publishes its own relay map \code{options(rtailcat.derp_map_url = url)}.
+For example, a deployment that runs its own relay region can call \code{options(rtailcat.region = region)} at startup, and one that publishes its own relay map \code{options(rtailcat.relay_map_url = url)}.
 }
 
 \examples{
@@ -63,7 +63,7 @@ srv$close()
   \describe{
     \item{\code{address}}{The secret tailcat address to give to clients, as a \link{tailcat_secret}. It is fetched from tailcat on each access (a quick local call) rather than stored in R. Errors if the server has not started.}
 
-    \item{\code{public_key}}{The server's public key, or \code{NA} before the server has started.}
+    \item{\code{public_key}}{The server's public key. Errors if the server has not started, like \verb{$address}; test \verb{$is_started} first when that is in doubt.}
 
     \item{\code{is_started}}{\code{TRUE} once the server has started (registered with the relay), \code{FALSE} before.}
 
@@ -102,7 +102,7 @@ srv$close()
   preshared_key = NULL,
   region_id = NULL,
   region = NULL,
-  derp_map_url = NULL,
+  relay_map_url = NULL,
   allowed_clients = NULL,
   udp_idle_timeout = NULL
 )}
@@ -115,8 +115,8 @@ srv$close()
       \item{\code{preshared_key}}{Pre-shared key (text encoding), or \code{NULL} to generate one (or take it from \code{key}).}
       \item{\code{region_id}}{Integer relay region to register in, or \code{NULL} to choose automatically.}
       \item{\code{region}}{A relay region definition, as a list or a JSON string, to use instead of the public relay map, or \code{NULL} to use the \code{rtailcat.region} option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by \code{\link[=tailcat_address_parse]{tailcat_address_parse()}} (\code{region_id}, \code{region_code}, \code{nodes}, and within each node \code{name}, \code{host_name}, \code{ipv4}, \code{relay_port}, and so on) or the PascalCase names of Tailscale's \code{DERPRegion} type (\code{RegionID}, \code{Nodes}, \code{HostName}, \code{DERPPort}, and so on).}
-      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.derp_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
-      \item{\code{allowed_clients}}{Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.}
+      \item{\code{relay_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.relay_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
+      \item{\code{allowed_clients}}{The clients that may connect: a character vector of client public keys, a \code{tailcat_keys} object from \code{\link[=tailcat_keygen]{tailcat_keygen()}} (whose public key is used), or a list of public keys and \code{tailcat_keys} objects. If given, only these clients may connect; otherwise anyone with the address may.}
       \item{\code{udp_idle_timeout}}{Seconds after which an idle UDP flow is dropped, or \code{NULL} for the default.}
     }
     \if{html}{\out{</div>}}
@@ -228,7 +228,7 @@ srv$close()
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{public_key}}{A client public key, for example \code{TailcatClient$public_key}.}
+      \item{\code{public_key}}{A client public key, for example \code{TailcatClient$public_key}, or the client's \code{tailcat_keys} object from \code{\link[=tailcat_keygen]{tailcat_keygen()}}, whose public key is used.}
       \item{\code{timeout}}{Seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
     }
     \if{html}{\out{</div>}}
@@ -251,7 +251,7 @@ srv$close()
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{public_key}}{A client public key.}
+      \item{\code{public_key}}{A client public key or \code{tailcat_keys} object, as for \verb{$allow_client()}.}
       \item{\code{timeout}}{Seconds to wait; \code{Inf} waits indefinitely and \code{0} polls.}
     }
     \if{html}{\out{</div>}}

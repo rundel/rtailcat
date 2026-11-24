@@ -7,7 +7,7 @@
 #' @param keys A `tailcat_keys` object from [tailcat_keygen()].
 #' @param path Path of the keys file.
 #' @param overwrite `TRUE` to replace an existing file. The default, `FALSE`, raises an error instead, so keys in use are not lost by accident.
-#' @return `tailcat_keys_save()` returns `path`, invisibly. `tailcat_keys_load()` returns a `tailcat_keys` object, as [tailcat_keygen()] does.
+#' @return `tailcat_keys_save()` returns `keys`, invisibly, so it can end a pipeline that creates them. `tailcat_keys_load()` returns a `tailcat_keys` object, as [tailcat_keygen()] does.
 #' @seealso [tailcat_address_write()] to pass an address through a file.
 #' @examples
 #' path = tempfile(fileext = ".json")
@@ -31,7 +31,7 @@ tailcat_keys_save = function(keys, path, overwrite = FALSE) {
     pretty = TRUE
   )
   write_private(as.character(json), path, overwrite)
-  invisible(path)
+  invisible(keys)
 }
 
 #' @rdname tailcat_keys_save
@@ -61,7 +61,7 @@ tailcat_keys_load = function(path) {
 #' @param address A started [TailcatServer], or an address as a string or [tailcat_secret].
 #' @param path Path of the address file.
 #' @param overwrite `TRUE` to replace an existing file, `FALSE` (the default) to raise an error instead.
-#' @return `tailcat_address_write()` returns `path`, invisibly. `tailcat_address_read()` returns the address as a [tailcat_secret], after checking that it parses as a tailcat address.
+#' @return `tailcat_address_write()` returns `address` as it was given (the server, or the address), invisibly. `tailcat_address_read()` returns the address as a [tailcat_secret], after checking that it parses as a tailcat address.
 #' @seealso [tailcat_reveal()] to show or pass on an address explicitly.
 #' @examples
 #' \dontrun{
@@ -70,18 +70,16 @@ tailcat_keys_load = function(path) {
 #' tailcat_address_write(srv, "~/.config/myjob/address")
 #'
 #' # In the job:
-#' cli = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
+#' cl = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
 #' }
 #' @export
 tailcat_address_write = function(address, path, overwrite = FALSE) {
-  if (is_tailcat_object(address, "TailcatServer")) {
-    address = address$address
-  }
-  address = check_address(address)
+  text = if (is_tailcat_object(address, "TailcatServer")) address$address else address
+  text = check_address(text)
   path = check_path(path)
   check_flag(overwrite, "overwrite")
-  write_private(address, path, overwrite)
-  invisible(path)
+  write_private(text, path, overwrite)
+  invisible(address)
 }
 
 #' @rdname tailcat_address_write

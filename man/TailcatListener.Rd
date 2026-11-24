@@ -8,11 +8,11 @@ A listener accepts TCP connections or UDP flows on one port of a \link{TailcatSe
 
 Accepted connections belong to the server rather than the listener: closing the listener stops new connections but leaves accepted ones open, while closing the server closes everything.
 
-Once the listener or its server is closed, every method other than \verb{$close()}, \verb{$stop_serving()}, \verb{$format()}, and \verb{$print()}, and every field other than \verb{$is_closed} and \verb{$server}, raises a \code{tailcat_closed} error. Timeouts (including \code{timeout = 0}, a poll) and errors are described in \link{TailcatServer}.
+Once the listener or its server is closed, every method other than \verb{$close()}, \verb{$stop_serving()}, \verb{$format()}, and \verb{$print()}, and every field other than \verb{$is_closed}, \verb{$is_serving}, and \verb{$server}, raises a \code{tailcat_closed} error. Timeouts (including \code{timeout = 0}, a poll) and errors are described in \link{TailcatServer}.
 }
 \section{Serving connections}{
 
-\verb{$serve(handler)} starts an accept loop driven by the later event loop and returns immediately. Each new connection is passed to \code{handler(conn)} on the main R thread. The loop only makes progress while the event loop runs: when R is idle at the console, inside Shiny or httpuv, or while a script calls \code{\link[later:run_now]{later::run_now()}} in a loop. Blocking calls inside the handler (such as \code{conn$read()}) hold up the loop until they return, so long-running handlers should use the \verb{_async()} methods and return the resulting promise. A handler may return a promise (or anything \code{\link[promises:is.promising]{promises::is.promising()}} accepts): if it rejects, the rejection is treated like an error signaled by the handler, so \code{on_error} is called and the connection is closed. The loop does not wait for the promise before accepting the next connection. The loop ends quietly when the listener or the server is closed, or when \verb{$stop_serving()} is called; \verb{$stop_serving()} leaves the listener open, so it can accept connections again or serve with a new handler.
+\verb{$serve(handler)} starts an accept loop driven by the later event loop and returns immediately. Each new connection is passed to \code{handler(conn)} on the main R thread. The loop only makes progress while the event loop runs: when R is idle at the console, inside Shiny or httpuv, or while a script calls \code{\link[later:run_now]{later::run_now()}} in a loop. Blocking calls inside the handler (such as \code{conn$read()}) hold up the loop until they return, so long-running handlers should use the \verb{_async()} methods and return the resulting promise. A handler may return a promise (or anything \code{\link[promises:is.promising]{promises::is.promising()}} accepts): if it rejects, the rejection is treated like an error signaled by the handler, so \code{on_error} is called and the connection is closed. The loop does not wait for the promise before accepting the next connection. The loop ends quietly when the listener or the server is closed, or when \verb{$stop_serving()} is called; \verb{$stop_serving()} leaves the listener open, so it can accept connections again or serve with a new handler. \verb{$is_serving} tells whether a loop is running.
 }
 
 \examples{
@@ -21,8 +21,7 @@ srv = TailcatServer$new()
 lst = srv$listen(7)
 lst$serve(function(conn) {
   promises::then(conn$read_all_async(timeout = 30), function(data) {
-    conn$write(data)
-    conn$close()
+    conn$write(data)$close()
   })
 })
 srv$address
@@ -38,6 +37,8 @@ srv$address
     \item{\code{network}}{\code{"tcp"} or \code{"udp"}.}
 
     \item{\code{server}}{The owning \link{TailcatServer}.}
+
+    \item{\code{is_serving}}{\code{TRUE} while an accept loop started by \verb{$serve()} is running, \code{FALSE} otherwise, including once the listener is closed.}
 
     \item{\code{is_closed}}{\code{TRUE} once the listener or its server has been closed.}
   }

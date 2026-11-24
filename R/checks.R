@@ -47,18 +47,18 @@ check_string = function(x, arg, null_ok = FALSE, trim = FALSE, call = rlang::cal
   enc2utf8(x)
 }
 
-# A NULL argument falls back to the rtailcat.derp_map_url option.
-check_derp_map_url = function(derp_map_url, call = rlang::caller_env()) {
-  if (!is.null(derp_map_url)) {
-    return(check_string(derp_map_url, "derp_map_url", call = call))
+# A NULL argument falls back to the rtailcat.relay_map_url option.
+check_relay_map_url = function(relay_map_url, call = rlang::caller_env()) {
+  if (!is.null(relay_map_url)) {
+    return(check_string(relay_map_url, "relay_map_url", call = call))
   }
-  value = getOption("rtailcat.derp_map_url")
+  value = getOption("rtailcat.relay_map_url")
   if (is.null(value)) {
     return(NULL)
   }
   if (!is_nonempty_string(value)) {
     abort_invalid(
-      "The {.code rtailcat.derp_map_url} option must be a single non-empty string or {.code NULL}.",
+      "The {.code rtailcat.relay_map_url} option must be a single non-empty string or {.code NULL}.",
       call = call
     )
   }
@@ -129,6 +129,45 @@ check_key = function(key, call = rlang::caller_env()) {
     ))
   }
   list(private_key = check_string(key, "key", call = call))
+}
+
+check_public_key = function(x, arg = "public_key", call = rlang::caller_env()) {
+  if (!inherits(x, "tailcat_keys")) {
+    return(check_string(x, arg, call = call))
+  }
+  key = if (is.list(x)) unclass(x)$public_key else NULL
+  if (!is_nonempty_string(key)) {
+    abort_invalid(
+      c(
+        "{.arg {arg}} is a {.cls tailcat_keys} object without a public key.",
+        i = "Create one with {.fn tailcat_keygen}."
+      ),
+      call = call
+    )
+  }
+  enc2utf8(key)
+}
+
+check_allowed_clients = function(x, call = rlang::caller_env()) {
+  if (inherits(x, "tailcat_keys")) {
+    x = list(x)
+  }
+  valid = if (is.list(x)) {
+    all(vapply(x, \(key) inherits(key, "tailcat_keys") || is_string(key), logical(1)))
+  } else {
+    is.character(x) && !anyNA(x)
+  }
+  if (!valid) {
+    abort_invalid(
+      "{.arg allowed_clients} must be a character vector of public keys, a {.cls tailcat_keys} object, or a list of them.",
+      call = call
+    )
+  }
+  if (!is.list(x)) {
+    return(enc2utf8(unname(x)))
+  }
+  vapply(x, \(key) check_public_key(key, "allowed_clients", call = call), character(1)) |>
+    unname()
 }
 
 check_region = function(region, what = "{.arg region}", call = rlang::caller_env()) {

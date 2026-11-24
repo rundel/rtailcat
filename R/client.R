@@ -14,12 +14,10 @@
 #' @examples
 #' \dontrun{
 #' address = readLines("address.txt")
-#' cli = TailcatClient$new(address)
-#' conn = cli$dial(8080)
-#' conn$write("hello\n")
-#' conn$close()
-#' cli$drain()
-#' cli$close()
+#' cl = TailcatClient$new(address)
+#' conn = cl$dial(8080)
+#' conn$write("hello\n")$close()
+#' cl$close(drain = 5)
 #' }
 #' @export
 TailcatClient = R6::R6Class(
@@ -29,12 +27,12 @@ TailcatClient = R6::R6Class(
     #' @description Create a client. No network access happens until it is used.
     #' @param address The server's secret tailcat address (a string or a [tailcat_secret]). Surrounding whitespace, such as a trailing newline from a file, is ignored.
     #' @param key Private node key (a string in text encoding, or a `tailcat_keys` object from [tailcat_keygen()]), or `NULL` to generate one. A stable key gives the client a stable public key, for use with `allowed_clients`.
-    #' @param derp_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.derp_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
-    initialize = function(address, key = NULL, derp_map_url = NULL) {
+    #' @param relay_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.relay_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
+    initialize = function(address, key = NULL, relay_map_url = NULL) {
       call = rlang::caller_env()
       config = list(address = check_address(address, call = call))
       config$key = check_key(key, call = call)$private_key
-      config$derp_map_url = check_derp_map_url(derp_map_url, call = call)
+      config$derp_map_url = check_relay_map_url(relay_map_url, call = call)
       result = rtc_client_new(to_json(config))
       if (inherits(result, "rtc_error")) {
         rtc_abort(
@@ -114,7 +112,7 @@ TailcatClient = R6::R6Class(
 
     #' @description Send a discovery ping, which also triggers direct path discovery.
     #' @param timeout Seconds to wait; use a finite value since discovery may otherwise wait indefinitely.
-    #' @return A list with `latency` (seconds), `endpoint` (the direct path, or `""` when relayed), `relay_region_id`, and `relay_region_code` (the relay region the ping went through).
+    #' @return A list with `latency` (seconds), `direct` (`TRUE` if the ping took a direct path to the server, `FALSE` if it went through a relay), `endpoint` (the direct path as `"host:port"`, or `NA` when relayed), `relay_region_id`, and `relay_region_code` (the relay region the ping went through). tailcat's C ABI reports a relayed ping as an empty `endpoint`.
     disco_ping = function(timeout = 30) {
       timeout = check_timeout(timeout)
       parse_disco_ping(private$check(

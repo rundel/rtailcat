@@ -12,8 +12,8 @@
 #' @return `tailcat_wait()` returns the promise's value. `tailcat_run()` returns, invisibly, `TRUE` if `until()` returned `TRUE` and `FALSE` if the timeout ran out.
 #' @examples
 #' \dontrun{
-#' cli = TailcatClient$new(address)
-#' conn = tailcat_wait(cli$dial_async(8080), timeout = 30)
+#' cl = TailcatClient$new(address)
+#' conn = tailcat_wait(cl$dial_async(8080), timeout = 30)
 #'
 #' srv = TailcatServer$new()
 #' lst = srv$listen(8080)

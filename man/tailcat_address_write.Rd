@@ -17,7 +17,7 @@ tailcat_address_read(path)
 \item{overwrite}{\code{TRUE} to replace an existing file, \code{FALSE} (the default) to raise an error instead.}
 }
 \value{
-\code{tailcat_address_write()} returns \code{path}, invisibly. \code{tailcat_address_read()} returns the address as a \link{tailcat_secret}, after checking that it parses as a tailcat address.
+\code{tailcat_address_write()} returns \code{address} as it was given (the server, or the address), invisibly. \code{tailcat_address_read()} returns the address as a \link{tailcat_secret}, after checking that it parses as a tailcat address.
 }
 \description{
 \code{tailcat_address_write()} writes a server's address to a file that only the current user can read, and \code{tailcat_address_read()} reads it back, for scripts and jobs that hand an address over through a shared file system rather than printing it. The address is a secret: anyone who can read it can connect to the server.
@@ -32,7 +32,7 @@ srv$start()
 tailcat_address_write(srv, "~/.config/myjob/address")
 
 # In the job:
-cli = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
+cl = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
 }
 }
 \seealso{

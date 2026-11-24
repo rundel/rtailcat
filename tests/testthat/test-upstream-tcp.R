@@ -1,7 +1,3 @@
-wait_close_write = function(conn, n) {
-  promises::then(conn$close_write_async(timeout = 30), \(x) n)
-}
-
 test_that("data written before a full close() reaches the peer, followed by end of stream", {
   # from internal/capi/e2e_test.go: TestE2ETCPRoundTripAndHalfClose
   skip_relay()
@@ -10,12 +6,12 @@ test_that("data written before a full close() reaches the peer, followed by end 
   cl = relay_client(srv$address)
   pair = connect_pair(lst, cl, lst$port)
 
-  expect_identical(pair$client$write("ping"), 4L)
+  expect_identical(pair$client$write("ping"), pair$client)
   pair$client$close_write()
   expect_identical(rawToChar(pair$server$read_all(timeout = 20)), "ping")
-  expect_true(pair$server$readable())
+  expect_true(pair$server$is_readable())
 
-  expect_identical(pair$server$write("pong"), 4L)
+  expect_identical(pair$server$write("pong"), pair$server)
   pair$server$close()
   expect_identical(rawToChar(pair$client$read_all(timeout = 20)), "pong")
   pair$client$close()
@@ -60,7 +56,7 @@ test_that("a read queued behind a pending read times out, and the pending read s
   expect_identical(rawToChar(pair$server$read(timeout = 20)), "second")
 })
 
-test_that("readable() never consumes buffered data and turns TRUE at end of stream", {
+test_that("is_readable() never consumes buffered data and turns TRUE at end of stream", {
   # from internal/capi/api_test.go: TestReadabilityDoesNotConsumePayload,
   # TestReadabilityReportsPeerEOF
   skip_relay()
@@ -69,17 +65,17 @@ test_that("readable() never consumes buffered data and turns TRUE at end of stre
   cl = relay_client(srv$address)
   pair = connect_pair(lst, cl, lst$port)
 
-  expect_false(pair$client$readable())
+  expect_false(pair$client$is_readable())
   pair$server$write("hello")
-  expect_true(run_until(\() pair$client$readable(), 20))
-  expect_true(pair$client$readable())
+  expect_true(run_until(\() pair$client$is_readable(), 20))
+  expect_true(pair$client$is_readable())
   expect_identical(rawToChar(pair$client$read(n = 5, timeout = 5)), "hello")
-  expect_false(pair$client$readable())
+  expect_false(pair$client$is_readable())
 
   pair$server$close_write()
-  expect_true(run_until(\() pair$client$readable(), 20))
+  expect_true(run_until(\() pair$client$is_readable(), 20))
   expect_null(pair$client$read(timeout = 5))
-  expect_true(pair$client$readable())
+  expect_true(pair$client$is_readable())
 })
 
 test_that("zero-byte TCP reads and writes succeed without signaling end of stream", {
@@ -91,9 +87,9 @@ test_that("zero-byte TCP reads and writes succeed without signaling end of strea
   pair = connect_pair(lst, cl, lst$port)
 
   expect_identical(pair$client$read(n = 0, timeout = 1), raw(0))
-  expect_identical(pair$client$write(raw(0)), 0L)
+  expect_identical(pair$client$write(raw(0)), pair$client)
   pair$server$close_write()
-  expect_true(run_until(\() pair$client$readable(), 20))
+  expect_true(run_until(\() pair$client$is_readable(), 20))
   expect_identical(pair$client$read(n = 0, timeout = 1), raw(0))
   expect_null(pair$client$read(timeout = 5))
 })
@@ -111,14 +107,14 @@ test_that("large payloads cross in both directions at once without corruption", 
   down = as.raw(sample(0:255, 1e6, replace = TRUE))
   got_up = pair$server$read_all_async(timeout = 60)
   got_down = pair$client$read_all_async(timeout = 60)
-  sent_up = promises::then(pair$client$write_async(up, timeout = 60), \(n) {
-    wait_close_write(pair$client, n)
+  sent_up = promises::then(pair$client$write_async(up, timeout = 60), \(conn) {
+    conn$close_write_async(timeout = 30)
   })
-  sent_down = promises::then(pair$server$write_async(down, timeout = 60), \(n) {
-    wait_close_write(pair$server, n)
+  sent_down = promises::then(pair$server$write_async(down, timeout = 60), \(conn) {
+    conn$close_write_async(timeout = 30)
   })
-  expect_equal(wait_for(sent_up, 70), length(up))
-  expect_equal(wait_for(sent_down, 70), length(down))
+  expect_identical(wait_for(sent_up, 70), pair$client)
+  expect_identical(wait_for(sent_down, 70), pair$server)
   expect_identical(wait_for(got_up, 70), up)
   expect_identical(wait_for(got_down, 70), down)
 })
@@ -186,7 +182,7 @@ test_that("info() and the address fields still work after both sides half-close"
   child = child_r(c(
     "srv = TailcatServer$new(region = region)",
     "lst = srv$listen(0)",
-    "cl = TailcatClient$new(srv$address, derp_map_url = derp_map_url)",
+    "cl = TailcatClient$new(srv$address, relay_map_url = relay_map_url)",
     "pending = lst$accept_async(timeout = 30)",
     "cc = cl$dial(lst$port, timeout = 30)",
     "sc = NULL",

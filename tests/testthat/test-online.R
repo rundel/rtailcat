@@ -16,7 +16,7 @@ test_that("TCP echo works in both directions and close_write signals EOF", {
   expect_identical(cc$remote_address, sc$local_address)
   expect_identical(cc$local_address, sc$remote_address)
 
-  expect_identical(cc$write("hello "), 6L)
+  expect_identical(cc$write("hello "), cc)
   cc$write(charToRaw("server"))
   cc$close_write()
   expect_identical(rawToChar(sc$read_all(timeout = 20)), "hello server")
@@ -26,7 +26,7 @@ test_that("TCP echo works in both directions and close_write signals EOF", {
   sc$close_write()
   expect_identical(rawToChar(cc$read_all(timeout = 20)), "hello client")
   expect_null(cc$read(timeout = 5))
-  expect_true(cc$readable())
+  expect_true(cc$is_readable())
 
   cc$close()
   sc$close()
@@ -50,7 +50,7 @@ test_that("async reads and writes resolve through the event loop", {
   cc = wait_for(pending_dial, 40)
 
   pending_read = sc$read_async(timeout = 20)
-  expect_identical(wait_for(cc$write_async("async"), 20), 5L)
+  expect_identical(wait_for(cc$write_async("async"), 20), cc)
   expect_identical(rawToChar(wait_for(pending_read, 20)), "async")
 
   pending_all = cc$read_all_async(timeout = 20)
@@ -223,11 +223,11 @@ test_that("UDP datagrams are exchanged as whole messages", {
   expect_identical(cc$read(n = 4, timeout = 20), as.raw(1:4))
 
   big = as.raw(rep(7L, 1232))
-  expect_identical(cc$write(big), 1232L)
+  expect_identical(cc$write(big), cc)
   expect_identical(sc$read(timeout = 20), big)
   expect_error(cc$write(raw(1233)), class = "tailcat_invalid_argument")
   expect_error(cc$read_all(), "only supported on TCP", class = "tailcat_invalid_argument")
-  expect_error(cc$readable(), "only supported on TCP", class = "tailcat_invalid_argument")
+  expect_error(cc$is_readable(), "only supported on TCP", class = "tailcat_invalid_argument")
   expect_error(cc$close_write(), "only supported on TCP", class = "tailcat_invalid_argument")
   expect_error(cc$close_write_async(), "only supported on TCP", class = "tailcat_invalid_argument")
   expect_error(cc$read_all_async(), "only supported on TCP", class = "tailcat_invalid_argument")
@@ -247,11 +247,22 @@ test_that("ping and disco_ping report latency", {
   expect_type(wait_for(cl$ping_async(timeout = 30), 40), "double")
 
   dp = cl$disco_ping(timeout = 30)
-  expect_setequal(names(dp), c("latency", "endpoint", "relay_region_id", "relay_region_code"))
+  expect_setequal(
+    names(dp),
+    c("latency", "direct", "endpoint", "relay_region_id", "relay_region_code")
+  )
   expect_type(dp$relay_region_id, "integer")
   expect_type(dp$latency, "double")
-  expect_type(rtailcat:::parse_disco_ping('{"latency":0,"endpoint":""}')$latency, "double")
   expect_type(dp$endpoint, "character")
+  expect_identical(dp$direct, !is.na(dp$endpoint))
+  relayed = rtailcat:::parse_disco_ping('{"latency":0,"endpoint":""}')
+  expect_type(relayed$latency, "double")
+  expect_identical(relayed[c("direct", "endpoint")], list(direct = FALSE, endpoint = NA_character_))
+  direct = rtailcat:::parse_disco_ping('{"latency":0.01,"endpoint":"192.0.2.1:41641"}')
+  expect_identical(
+    direct[c("direct", "endpoint")],
+    list(direct = TRUE, endpoint = "192.0.2.1:41641")
+  )
   expect_named(wait_for(cl$disco_ping_async(timeout = 30), 40), names(dp), ignore.order = TRUE)
 })
 
@@ -259,12 +270,12 @@ test_that("address_resolve returns a usable address", {
   skip_relay()
   srv = relay_server()
   srv$start()
-  resolved = tailcat_address_resolve(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30)
+  resolved = tailcat_address_resolve(srv$address, relay_map_url = relay_map_url(), timeout = 30)
   expect_type(resolved, "character")
   expect_identical(tailcat_address_parse(resolved)$public_key, srv$public_key)
   expect_identical(
     wait_for(
-      tailcat_address_resolve_async(srv$address, derp_map_url = relay_derp_map_url(), timeout = 30),
+      tailcat_address_resolve_async(srv$address, relay_map_url = relay_map_url(), timeout = 30),
       40
     ),
     resolved

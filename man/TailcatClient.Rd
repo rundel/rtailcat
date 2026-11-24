@@ -17,12 +17,10 @@ A server with an allowlist (\code{allowed_clients} or \code{TailcatServer$allow_
 \examples{
 \dontrun{
 address = readLines("address.txt")
-cli = TailcatClient$new(address)
-conn = cli$dial(8080)
-conn$write("hello\n")
-conn$close()
-cli$drain()
-cli$close()
+cl = TailcatClient$new(address)
+conn = cl$dial(8080)
+conn$write("hello\n")$close()
+cl$close(drain = 5)
 }
 }
 \section{Active bindings}{
@@ -60,7 +58,7 @@ cli$close()
   Create a client. No network access happens until it is used.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{TailcatClient$new(address, key = NULL, derp_map_url = NULL)}
+    \preformatted{TailcatClient$new(address, key = NULL, relay_map_url = NULL)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
@@ -68,7 +66,7 @@ cli$close()
     \describe{
       \item{\code{address}}{The server's secret tailcat address (a string or a \link{tailcat_secret}). Surrounding whitespace, such as a trailing newline from a file, is ignored.}
       \item{\code{key}}{Private node key (a string in text encoding, or a \code{tailcat_keys} object from \code{\link[=tailcat_keygen]{tailcat_keygen()}}), or \code{NULL} to generate one. A stable key gives the client a stable public key, for use with \code{allowed_clients}.}
-      \item{\code{derp_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.derp_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
+      \item{\code{relay_map_url}}{URL of a relay map to use instead of the default, or \code{NULL} to use the \code{rtailcat.relay_map_url} option (see the section on relay options in \link{TailcatServer}) or, when that is unset, the default.}
     }
     \if{html}{\out{</div>}}
   }
@@ -184,7 +182,7 @@ cli$close()
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    A list with \code{latency} (seconds), \code{endpoint} (the direct path, or \code{""} when relayed), \code{relay_region_id}, and \code{relay_region_code} (the relay region the ping went through).
+    A list with \code{latency} (seconds), \code{direct} (\code{TRUE} if the ping took a direct path to the server, \code{FALSE} if it went through a relay), \code{endpoint} (the direct path as \code{"host:port"}, or \code{NA} when relayed), \code{relay_region_id}, and \code{relay_region_code} (the relay region the ping went through). tailcat's C ABI reports a relayed ping as an empty \code{endpoint}.
   }
 }
 

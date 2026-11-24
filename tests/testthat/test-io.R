@@ -13,7 +13,7 @@ test_that("a huge n does not make the read allocate it, and one read returns at 
   payload = as.raw(sample(0:255, 200000, replace = TRUE))
   pair$client$write(payload)
   pair$client$close_write()
-  expect_true(run_until(\() pair$server$readable(), 20))
+  expect_true(run_until(\() pair$server$is_readable(), 20))
   run_until(\() FALSE, 0.5)
   first = pair$server$read(n = 1e6, timeout = 20)
   expect_lte(length(first), 65536L)
@@ -84,7 +84,7 @@ test_that("a latin1 string is written as UTF-8", {
 
   text = iconv("café ü", "UTF-8", "latin1")
   expect_identical(Encoding(text), "latin1")
-  expect_identical(pair$client$write(text), 8L)
+  expect_identical(pair$client$write(text), pair$client)
   got = pair$server$read(timeout = 20, as = "text")
   expect_identical(got, "café ü")
   expect_identical(charToRaw(got), as.raw(c(0x63, 0x61, 0x66, 0xc3, 0xa9, 0x20, 0xc3, 0xbc)))
@@ -94,7 +94,7 @@ test_that("an operation started inside a private later loop completes on that lo
   map_url = silent_map_url()
   cl = TailcatClient$new(
     tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)),
-    derp_map_url = map_url
+    relay_map_url = map_url
   )
   on.exit(cl$close())
   state = new.env()

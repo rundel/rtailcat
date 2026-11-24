@@ -97,7 +97,7 @@ test_that("read_exact() reads exactly n bytes across chunks and returns NULL at 
   expect_match(conditionMessage(cond), "trying to read 5 bytes", fixed = TRUE)
 
   pair$client$write("defgh")
-  expect_true(run_until(\() pair$server$readable(), 20))
+  expect_true(run_until(\() pair$server$is_readable(), 20))
   expect_identical(pair$server$read_exact(5, timeout = 0, as = "text"), "defgh")
   expect_error(pair$server$read_exact(1, timeout = 0), class = "tailcat_timeout")
 
@@ -117,10 +117,10 @@ test_that("messages keep their boundaries in both directions", {
   pair = connect_pair(lst, cl, lst$port)
 
   big = as.raw(rep_len(0:255, 300000))
-  expect_identical(pair$client$write_message("hello"), 5L)
+  expect_identical(pair$client$write_message("hello"), pair$client)
   pair$client$write_message(raw(0))
   pair$client$write_message(big)
-  expect_identical(wait_for(pair$client$write_message_async(c("a", "b")), 20), 2L)
+  expect_identical(wait_for(pair$client$write_message_async(c("a", "b")), 20), pair$client)
 
   expect_identical(pair$server$read_message(timeout = 20, as = "text"), "hello")
   expect_identical(pair$server$read_message(timeout = 20), raw(0))

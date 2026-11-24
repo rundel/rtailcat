@@ -12,7 +12,7 @@ example_files = c("wormhole", "progress", "proxy")
 load_examples = function(env = parent.frame()) {
   withr::local_options(
     rtailcat.region = relay_region(),
-    rtailcat.derp_map_url = relay_derp_map_url(),
+    rtailcat.relay_map_url = relay_map_url(),
     .local_envir = env
   )
   env = new.env(parent = asNamespace("rtailcat"))
@@ -26,7 +26,7 @@ load_examples = function(env = parent.frame()) {
 example_child = function(code) {
   child_r(c(
     paste0("examples = ", deparse(examples_dir())),
-    "options(rtailcat.region = region, rtailcat.derp_map_url = derp_map_url)",
+    "options(rtailcat.region = region, rtailcat.relay_map_url = relay_map_url)",
     paste0(
       "for (f in ",
       deparse(example_files),
@@ -69,7 +69,8 @@ test_that("the example files parse and define the documented functions", {
     "progress_done",
     "proxy_share",
     "proxy_open",
-    "proxy_close"
+    "proxy_close",
+    "new_proxy"
   )
   for (fn in fns) {
     expect_true(is.function(ex[[fn]]), label = fn)
@@ -99,22 +100,47 @@ test_that("wormhole sends an object and refuses one over max_bytes", {
 
 test_that("progress collects reports and drops oversized ones", {
   skip_relay()
+  skip_if_not_installed("tibble")
   ex = load_examples()
   m = suppressMessages(ex$progress_monitor())
   withr::defer(ex$progress_stop(m))
+  expect_identical(ex$progress_data(m), tibble::tibble(job = character(), seq = integer()))
+  expect_match(
+    utils::capture.output(ex$print.progress_monitor(m)),
+    "0 reports from 0 jobs (collecting)",
+    fixed = TRUE
+  )
 
   reporter = ex$progress_reporter(m$server$address, job = "a")
   withr::defer(ex$progress_done(reporter))
   for (i in 1:5) {
-    expect_true(ex$progress_report(reporter, iter = i, loss = 1 / i))
+    expect_identical(
+      expect_invisible(ex$progress_report(reporter, iter = i, loss = 1 / i)),
+      reporter
+    )
   }
   expect_true(run_until(\() length(m$events) == 5, 20))
   d = ex$progress_data(m)
+  expect_s3_class(d, "tbl_df")
+  expect_named(d, c("job", "seq", "iter", "loss"))
   expect_identical(d$job, rep("a", 5))
   expect_identical(d$seq, 1:5)
   expect_equal(d$loss, 1 / (1:5))
+  expect_named(m$last_seen, "a")
+  expect_identical(reporter$unsent, 0L)
 
-  expect_warning(expect_false(ex$progress_report(reporter, note = strrep("x", 2000))), "1232")
+  expect_warning(ex$progress_report(reporter, note = strrep("x", 2000)), "1232")
+  expect_identical(reporter$unsent, 1L)
+  expect_error(ex$progress_report(reporter, seq = 1), "seq")
+  expect_error(ex$progress_report(reporter, job = "b", seq = 1), "job")
+
+  # A field that partially matches `reporter` is sent, not taken for the argument
+  ex$progress_report(reporter, rep = 3)
+  expect_true(run_until(\() length(m$events) == 6, 20))
+  expect_identical(m$events[[6]]$rep, 3L)
+
+  expect_identical(expect_invisible(ex$progress_stop(m)), m)
+  expect_match(utils::capture.output(ex$print.progress_monitor(m)), "(stopped)", fixed = TRUE)
 })
 
 # Runs an HTTP client in a separate process, because the proxy answers its
@@ -159,13 +185,14 @@ test_that("proxy forwards requests to an app on the other side", {
   )
   withr::defer(app$kill())
 
-  child = example_child(paste0("srv = proxy_share(", app_port, "); tailcat_run(timeout = 120)"))
+  child = example_child(paste0("shared = proxy_share(", app_port, "); tailcat_run(timeout = 120)"))
   withr::defer(child$kill())
 
   port = httpuv::randomPort()
   p = suppressMessages(ex$proxy_open(child_address(child), port = port))
   withr::defer(ex$proxy_close(p))
   url = paste0("http://127.0.0.1:", port)
+  expect_identical(utils::capture.output(ex$print.proxy(p)), paste0("<proxy> serving ", url))
 
   res = proxy_get(paste0(url, "/a/b?x=1"))
   expect_identical(res$status, 200L)
@@ -178,4 +205,7 @@ test_that("proxy forwards requests to an app on the other side", {
   res = proxy_get(paste0(url, "/gone"))
   expect_identical(res$status, 502L)
   expect_match(res$body, "could not reach the app")
+
+  expect_identical(expect_invisible(ex$proxy_close(p)), p)
+  expect_match(utils::capture.output(ex$print.proxy(p)), "(closed)", fixed = TRUE)
 })

@@ -5,13 +5,13 @@
 #'
 #' `print()`, `format()`, `str()`, and `toString()` show `<redacted>` instead of the value, and so do printing and `str()` of a list that contains a secret. `format()` of a plain list that contains a secret redacts it in R 4.6.0 and later; earlier versions of R format list elements without consulting their class, so there it shows the value. The list returned by `TailcatServer$info()` has class `tailcat_info` and the list returned by [tailcat_keygen()] has class `tailcat_keys`, and both redact under `format()` in every version of R.
 #'
-#' Everything else sees the plain string: `as.character()`, `unclass()`, `paste()`, `paste0()`, `cat()`, `writeLines()`, `nchar()`, and `identical()` on the unclassed value. A secret can be passed directly wherever this package expects an address or key, such as `TailcatClient$new()` and `TailcatServer$new()`. Functions that drop attributes, such as `c()`, `unlist()`, and subsetting with `[`, return the plain string too.
+#' Everything else sees the plain string: `as.character()`, `unclass()`, `paste()`, `paste0()`, `cat()`, `writeLines()`, `nchar()`, and `identical()` on the unclassed value. A secret can be passed directly wherever this package expects an address or key, such as `TailcatClient$new()` and `TailcatServer$new()`. Subsetting a secret with `[` or `[[`, and combining with `c()` when the first argument is a secret, give a secret again, so they stay redacted. Functions that drop attributes, such as `unlist()` on a list of secrets or `c()` with a plain string first, return the plain string.
 #'
 #' Redaction only protects against accidental display. `dput()`, `deparse()`, `saveRDS()`, and `save()` necessarily include the value, as does any explicit conversion with `as.character()` or `unclass()`, so store and share secrets deliberately.
 #'
 #' @param x,object A `tailcat_secret`, or the `tailcat_info` list returned by `TailcatServer$info()`.
-#' @param ... Ignored.
-#' @return `format()` and `toString()` return `"<redacted>"` for each element of a secret; `format()` of a `tailcat_info` list returns a named character vector with its secrets redacted; `print()` and `str()` return their input invisibly.
+#' @param ... Ignored by the display methods. For `[` and `[[`, the index; for `c()`, the secrets or strings to combine.
+#' @return `[`, `[[`, and `c()` return a `tailcat_secret`; `format()` and `toString()` return `"<redacted>"` for each element of a secret; `format()` of a `tailcat_info` list returns a named character vector with its secrets redacted; `print()` and `str()` return their input invisibly.
 #' @examples
 #' keys = tailcat_keygen()
 #' keys$private_key
@@ -50,6 +50,24 @@ str.tailcat_secret = function(object, ...) {
 #' @export
 toString.tailcat_secret = function(x, ...) {
   secret_label
+}
+
+#' @rdname tailcat_secret
+#' @export
+`[.tailcat_secret` = function(x, ...) {
+  structure(NextMethod(), class = "tailcat_secret")
+}
+
+#' @rdname tailcat_secret
+#' @export
+`[[.tailcat_secret` = function(x, ...) {
+  structure(NextMethod(), class = "tailcat_secret")
+}
+
+#' @rdname tailcat_secret
+#' @export
+c.tailcat_secret = function(...) {
+  new_secret(unlist(lapply(list(...), \(x) as.character(unclass(x)))))
 }
 
 # Strips the class so a secret can be validated and passed on like a string.

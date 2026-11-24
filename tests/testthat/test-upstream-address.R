@@ -162,7 +162,7 @@ test_that("resolving an address that already embeds a relay region is a local no
   ))
   resolved = tailcat_address_resolve(
     addr,
-    derp_map_url = "http://127.0.0.1:9/unreachable",
+    relay_map_url = "http://127.0.0.1:9/unreachable",
     timeout = 5
   )
   expect_s3_class(resolved, "tailcat_secret")

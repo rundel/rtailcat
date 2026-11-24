@@ -83,7 +83,7 @@ format_bytes = function(n) {
 }
 
 wormhole_send = function(x, timeout = 600) {
-  # Sends an R object to one receiver and waits until it confirms
+  # Sends an R object to one receiver, waits until it confirms, and returns the object
 
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)
@@ -104,10 +104,11 @@ wormhole_send = function(x, timeout = 600) {
   # ends the stream or resets it, so a failure also counts as no confirmation
   payload = serialize(x, NULL)
   reply = tryCatch(
-    {
-      conn$write_message(payload, timeout = timeout)
-      conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
-    },
+    conn$write_message(payload, timeout = timeout)$read_message(
+      timeout = timeout,
+      as = "text",
+      max_bytes = 16
+    ),
     tailcat_failure = \(e) NULL
   )
   if (!identical(reply, "ok")) {
@@ -116,7 +117,7 @@ wormhole_send = function(x, timeout = 600) {
   conn$close()
   srv$close(drain = 5)
   cli::cli_inform("Sent {format_bytes(length(payload))}.")
-  invisible(TRUE)
+  invisible(x)
 }
 ```
 
@@ -157,8 +158,7 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
   value = unserialize(payload)
   cli::cli_inform("Received {format_bytes(length(payload))}.")
 
-  conn$write_message("ok", timeout = 60)
-  conn$close_write()
+  conn$write_message("ok", timeout = 60)$close_write()
   value
 }
 ```
@@ -216,17 +216,17 @@ The monitor listens on a UDP port and calls a handler for each flow, one per job
 ```{r}
 #| label: progress-def-monitor
 progress_record = function(monitor, datagram) {
-  # Stores one report, ignoring datagrams that are not JSON objects
+  # Stores one report, ignoring datagrams that are not JSON objects naming their job
 
   event = tryCatch(
     datagram |> rawToChar() |> jsonlite::fromJSON(),
     error = \(e) NULL
   )
-  if (is.list(event)) {
-    event$received = Sys.time()
+  if (is.list(event) && is.character(event$job) && length(event$job) == 1) {
     monitor$events[[length(monitor$events) + 1]] = event
+    monitor$last_seen[[event$job]] = Sys.time()
   }
-  invisible()
+  invisible(monitor)
 }
 
 progress_monitor = function(port = 9000L) {
@@ -236,7 +236,9 @@ progress_monitor = function(port = 9000L) {
   lst = srv$listen(port, network = "udp")
   monitor = new.env(parent = emptyenv())
   monitor$server = srv
+  monitor$listener = lst
   monitor$events = list()
+  monitor$last_seen = list()
 
   # A failed flow is closed anyway and there is no one to tell, so its error is
   # dropped instead of becoming a warning
@@ -255,47 +257,48 @@ progress_monitor = function(port = 9000L) {
 }
 
 progress_data = function(monitor) {
-  # Returns the reports as a data frame with one row per report, ordered by job and sequence number
+  # Returns the reports as a tibble with one row per report, ordered by job and sequence number
 
   events = monitor$events
   if (length(events) == 0) {
-    return(data.frame())
+    return(tibble::tibble(job = character(), seq = integer()))
   }
 
   # Reports may carry different fields
   cols = events |> lapply(names) |> unlist() |> unique()
   rows = lapply(events, \(e) {
     e[setdiff(cols, names(e))] = NA
-    as.data.frame(e[cols])
+    tibble::as_tibble(e[cols])
   })
   out = do.call(rbind, rows)
-  out = out[order(out$job, out$seq), , drop = FALSE]
-  rownames(out) = NULL
-  out
+  out[order(out$job, out$seq), ]
 }
 
 progress_stop = function(monitor) {
-  # Stops collecting reports and closes the monitor's server
+  # Stops collecting reports, closes the monitor's server, and returns the monitor
 
   monitor$server$close()
-  invisible()
+  invisible(monitor)
 }
 
 print.progress_monitor = function(x, ...) {
-  # Shows how many reports have arrived from how many jobs
+  # Shows how many reports have arrived from how many jobs, and whether more can arrive
 
   n = length(x$events)
-  jobs = vapply(x$events, \(e) e$job, character(1)) |> unique() |> length()
-  "<progress monitor> {n} report{?s} from {jobs} job{?s}" |>
+  jobs = length(x$last_seen)
+  state = if (x$listener$is_serving) "collecting" else "stopped"
+  "<progress monitor> {n} report{?s} from {jobs} job{?s} ({state})" |>
     cli::pluralize() |>
     cat("\n", sep = "")
   invisible(x)
 }
 ```
 
-A report that is malformed, for example one sent by something other than `progress_report()`, is ignored. Since a monitor accepts reports from anyone who has its address, it does nothing with them other than store them. If reading from a flow fails, the read loop closes it; the `on_error` callback that does nothing keeps that from showing up as a warning.
+A report that is malformed, for example one sent by something other than `progress_report()`, is ignored. Since a monitor accepts reports from anyone who has its address, it does nothing with them other than store them. The monitor also notes when it last heard from each job, which it keeps to itself rather than adding to the reports: `progress_data()` returns what the jobs said. The print method uses the listener's `$is_serving` to say whether the monitor is still collecting. If reading from a flow fails, the read loop closes it; the `on_error` callback that does nothing keeps that from showing up as a warning.
 
-The job side dials the monitor once and then sends one datagram per report. Each report carries the job name and a sequence number, so the monitor can tell jobs apart and notice lost reports. `progress_report()` never signals an error: if the monitor is unreachable the report is simply lost, and a write that cannot complete within a second is abandoned.
+The job side dials the monitor once and then sends one datagram per report. Each report carries the job name and a sequence number, so the monitor can tell jobs apart and notice lost reports. `progress_report()` never stops the job because of the network: if the monitor is unreachable the report is simply lost, and a write that cannot complete within a second is abandoned. It returns the reporter, which counts such reports in `reporter$unsent`, rather than a `TRUE` or `FALSE` that a job would have to check after every call.
+
+The fields of a report are whatever the job names in `...`, so the reporter argument is called `.reporter`: without the dot, a field called `reporter`, or just `rep`, would be taken for the argument instead of being sent. For the same reason the two names every report already carries, `job` and `seq`, are refused.
 
 ```{r}
 #| label: progress-def-reporter
@@ -308,48 +311,49 @@ progress_reporter = function(address, job, port = 9000L) {
   reporter$conn = cl$dial(port, network = "udp", timeout = 60)
   reporter$job = job
   reporter$seq = 0L
+  reporter$unsent = 0L
   reporter
 }
 
-progress_report = function(reporter, ...) {
-  # Sends one report with the fields in `...` and returns whether it was sent
+progress_report = function(.reporter, ...) {
+  # Sends one report with the fields in `...` and returns the reporter
 
-  reporter$seq = reporter$seq + 1L
-  event = list(
-    job = reporter$job,
-    seq = reporter$seq,
-    sent = as.numeric(Sys.time()),
-    ...
-  )
-  payload = event |>
+  fields = list(...)
+  reserved = intersect(names(fields), c("job", "seq"))
+  if (length(reserved) > 0) {
+    cli::cli_abort("A report cannot have {cli::qty(reserved)}field{?s} named {.field {reserved}}.")
+  }
+  seq = .reporter$seq + 1L
+  .reporter$seq = seq
+  payload = c(list(job = .reporter$job, seq = seq), fields) |>
     jsonlite::toJSON(auto_unbox = TRUE, digits = NA) |>
     charToRaw()
   limit = tailcat_udp_max_payload()
   if (length(payload) > limit) {
     cli::cli_warn(c(
-      "Report {reporter$seq} was not sent.",
+      "Report {seq} was not sent.",
       "i" = "It is {length(payload)} bytes; a datagram holds at most {limit}."
     ))
-    return(invisible(FALSE))
+    .reporter$unsent = .reporter$unsent + 1L
+    return(invisible(.reporter))
   }
 
   # Monitoring must never slow down or stop the job, so a failed send is
-  # given up after a second and otherwise ignored
-  sent = tryCatch(
-    {
-      reporter$conn$write(payload, timeout = 1)
-      TRUE
-    },
-    error = \(e) FALSE
+  # given up after a second and only counted
+  tryCatch(
+    .reporter$conn$write(payload, timeout = 1),
+    error = \(e) {
+      .reporter$unsent = .reporter$unsent + 1L
+    }
   )
-  invisible(sent)
+  invisible(.reporter)
 }
 
 progress_done = function(reporter) {
-  # Disconnects the reporter from the monitor
+  # Disconnects the reporter from the monitor and returns the reporter
 
   reporter$client$close()
-  invisible()
+  invisible(reporter)
 }
 ```
 
@@ -393,9 +397,9 @@ progress_app = function(monitor, x = "iter", y = "loss") {
     output$latest = shiny::renderTable({
       d = data()
       shiny::req(nrow(d) > 0)
-      last = !duplicated(d$job, fromLast = TRUE)
-      latest = d[last, setdiff(names(d), c("sent", "received")), drop = FALSE]
-      latest$age = difftime(Sys.time(), d$received[last], units = "secs") |>
+      latest = d[!duplicated(d$job, fromLast = TRUE), ]
+      seen = do.call(c, monitor$last_seen[latest$job])
+      latest$age = difftime(Sys.time(), seen, units = "secs") |>
         as.double() |>
         round() |>
         paste("s")
@@ -441,13 +445,32 @@ Back on the laptop the reports have arrived. Missing sequence numbers would show
 #| label: progress-laptop-data
 #| class-source: laptop
 m
-#> <progress monitor> 20 reports from 1 job
+#> <progress monitor> 20 reports from 1 job (collecting)
 d = progress_data(m)
-tail(d[c("job", "seq", "iter", "loss")], 3)
-#>      job seq iter       loss
-#> 18 fit-1  18   18 0.01801440
-#> 19 fit-1  19   19 0.01441152
-#> 20 fit-1  20   20 0.01152922
+d
+#> # A tibble: 20 × 4
+#>    job     seq  iter   loss
+#>    <chr> <int> <int>  <dbl>
+#>  1 fit-1     1     1 0.8
+#>  2 fit-1     2     2 0.64
+#>  3 fit-1     3     3 0.512
+#>  4 fit-1     4     4 0.410
+#>  5 fit-1     5     5 0.328
+#>  6 fit-1     6     6 0.262
+#>  7 fit-1     7     7 0.210
+#>  8 fit-1     8     8 0.168
+#>  9 fit-1     9     9 0.134
+#> 10 fit-1    10    10 0.107
+#> 11 fit-1    11    11 0.0859
+#> 12 fit-1    12    12 0.0687
+#> 13 fit-1    13    13 0.0550
+#> 14 fit-1    14    14 0.0440
+#> 15 fit-1    15    15 0.0352
+#> 16 fit-1    16    16 0.0281
+#> 17 fit-1    17    17 0.0225
+#> 18 fit-1    18    18 0.0180
+#> 19 fit-1    19    19 0.0144
+#> 20 fit-1    20    20 0.0115
 setdiff(seq_len(max(d$seq)), d$seq)
 #> integer(0)
 ```
@@ -485,10 +508,8 @@ proxy_send = function(conn, head, body) {
   # Sends one request or response: a JSON head, then the body as its own message
 
   head$headers = I(head$headers)
-  head |>
-    jsonlite::toJSON(auto_unbox = TRUE) |>
-    conn$write_message(timeout = 60)
-  conn$write_message(body, timeout = 60)
+  head = jsonlite::toJSON(head, auto_unbox = TRUE)
+  conn$write_message(head, timeout = 60)$write_message(body, timeout = 60)
 }
 
 proxy_receive = function(conn, max_bytes) {
@@ -592,9 +613,35 @@ proxy_share = function(app_port, max_bytes = 1e8) {
     "Sharing the app on port {app_port}. Address for the other machine:",
     "{address}"
   ))
-  invisible(srv)
+  new_proxy(srv, paste("sharing the app on port", app_port))
+}
+
+new_proxy = function(node, what, http = NULL) {
+  # One end of a proxy: its tailcat server or client, and on the opening side the local web server
+
+  structure(list(node = node, what = what, http = http), class = "proxy")
+}
+
+print.proxy = function(x, ...) {
+  # Shows what the proxy does, and whether it has been closed
+
+  state = if (x$node$is_closed) " (closed)" else ""
+  cat("<proxy> ", x$what, state, "\n", sep = "")
+  invisible(x)
+}
+
+proxy_close = function(proxy) {
+  # Stops either end of a proxy and returns it
+
+  if (!is.null(proxy$http)) {
+    httpuv::stopServer(proxy$http)
+  }
+  proxy$node$close()
+  invisible(proxy)
 }
 ```
+
+Both ends of a proxy are the same kind of object, so one `proxy_close()` stops either, and printing one says what it is doing.
 
 Anyone with the address can use the app through it, so share the address only with people who may use the app. The proxy only ever connects to the one port it was given on `127.0.0.1`, and it checks the path because a path that does not start with `/` would turn the URL into one for another host.
 
@@ -635,17 +682,9 @@ proxy_open = function(address, port = 8080L) {
   # Serves the app shared at `address` on http://127.0.0.1:`port` of this machine
 
   cl = TailcatClient$new(address)
-  server = httpuv::startServer("127.0.0.1", port, list(call = \(req) proxy_fetch(cl, req)))
+  http = httpuv::startServer("127.0.0.1", port, list(call = \(req) proxy_fetch(cl, req)))
   cli::cli_inform("Open {.url http://127.0.0.1:{port}} to use the app on the other machine.")
-  structure(list(client = cl, server = server), class = "proxy")
-}
-
-proxy_close = function(proxy) {
-  # Stops the local server and disconnects from the other machine
-
-  httpuv::stopServer(proxy$server)
-  proxy$client$close()
-  invisible()
+  new_proxy(cl, paste0("serving http://127.0.0.1:", port), http)
 }
 ```
 
@@ -668,9 +707,11 @@ app = callr::r_bg(\() {
     )
   }))
 })
-srv = proxy_share(8000)
+shared = proxy_share(8000)
 #> Sharing the app on port 8000. Address for the other machine:
 #> tcAbC...xYz
+shared
+#> <proxy> sharing the app on port 8000
 ```
 
 On your machine, open the proxy with that address. Then point a browser at the URL it prints.
@@ -705,7 +746,6 @@ proxy_close(p)
 ```{r}
 #| label: proxy-app-stop
 #| class-source: app
-srv$close()
-app$kill()
-#> [1] TRUE
+proxy_close(shared)
+invisible(app$kill())
 ```

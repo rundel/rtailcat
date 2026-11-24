@@ -37,7 +37,7 @@ test_that("an invalid rtailcat.max_operations makes operations fail with tailcat
   base = in_flight()
   withr::local_options(rtailcat.max_operations = 0)
   cond = tryCatch(
-    tailcat_address_resolve(offline_address(), derp_map_url = map_url, timeout = 0),
+    tailcat_address_resolve(offline_address(), relay_map_url = map_url, timeout = 0),
     error = identity
   )
   expect_s3_class(cond, "tailcat_failure")
@@ -49,7 +49,7 @@ test_that("an invalid rtailcat.max_operations makes operations fail with tailcat
   )
   expect_error(
     wait_for(
-      tailcat_address_resolve_async(offline_address(), derp_map_url = map_url, timeout = 0),
+      tailcat_address_resolve_async(offline_address(), relay_map_url = map_url, timeout = 0),
       10
     ),
     "rtailcat.max_operations",
@@ -59,7 +59,7 @@ test_that("an invalid rtailcat.max_operations makes operations fail with tailcat
 
   withr::local_options(rtailcat.max_operations = Inf)
   expect_error(
-    tailcat_address_resolve(offline_address(), derp_map_url = map_url, timeout = 0),
+    tailcat_address_resolve(offline_address(), relay_map_url = map_url, timeout = 0),
     class = "tailcat_timeout"
   )
   expect_identical(in_flight(), base)
@@ -71,13 +71,13 @@ test_that("operations beyond the cap fail at once and work again once others end
   withr::local_options(rtailcat.max_operations = base + 2)
 
   pending = lapply(1:2, \(i) {
-    tailcat_address_resolve_async(offline_address(), derp_map_url = map_url, timeout = 60)
+    tailcat_address_resolve_async(offline_address(), relay_map_url = map_url, timeout = 60)
   })
   expect_identical(in_flight(), base + 2)
 
   started = Sys.time()
   cond = tryCatch(
-    tailcat_address_resolve(offline_address(), derp_map_url = map_url, timeout = 30),
+    tailcat_address_resolve(offline_address(), relay_map_url = map_url, timeout = 30),
     error = identity
   )
   expect_lt(as.double(Sys.time() - started, units = "secs"), 1)
@@ -89,7 +89,7 @@ test_that("operations beyond the cap fail at once and work again once others end
   )
   expect_match(conditionMessage(cond), "rtailcat.max_operations", fixed = TRUE)
   expect_error(
-    wait_for(tailcat_address_resolve_async(offline_address(), derp_map_url = map_url), 10),
+    wait_for(tailcat_address_resolve_async(offline_address(), relay_map_url = map_url), 10),
     "rtailcat.max_operations",
     class = "tailcat_failure"
   )
@@ -113,7 +113,7 @@ test_that("operations beyond the cap fail at once and work again once others end
   }
   expect_identical(in_flight(), base)
   expect_error(
-    tailcat_address_resolve(offline_address(), derp_map_url = map_url, timeout = 0),
+    tailcat_address_resolve(offline_address(), relay_map_url = map_url, timeout = 0),
     class = "tailcat_timeout"
   )
   expect_identical(in_flight(), base)

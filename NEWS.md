@@ -13,12 +13,17 @@ Initial version, embedding tailcat's Go library through its C ABI (version 1).
 - Helpers for building protocols on top of a connection: `$write_message()` and `$read_message()` send and receive length-prefixed messages over TCP (a 4-byte big-endian length, then the bytes), with `max_bytes` checked before a message is read; `$read_exact()` reads exactly `n` bytes; `$read_loop()` and `$stop_reading()` read chunks, datagrams, or messages continuously on the event loop, like `$serve()` does for accepts. Each has an `_async()` twin where it blocks.
 - `tailcat_keys_save()`, `tailcat_keys_load()`, and `tailcat_keygen(path)` keep keys in a JSON file that only the owner can read, and `tailcat_address_write()` and `tailcat_address_read()` do the same for an address. `tailcat_reveal()` returns the plain string of a `tailcat_secret` where an application means to show it.
 - `$close(drain = )` on servers and clients waits for TCP shutdown traffic before closing.
+- Methods and functions that change an object return it invisibly, so calls chain: `conn$write(data)$close_write()$read_all()`. This includes `$write()` and `$write_message()`, which return the connection rather than a byte count (their `_async()` twins resolve with it), and `tailcat_keys_save()` and `tailcat_address_write()`, which return their first argument.
+- `TailcatListener$is_serving` and `TailcatConnection$is_reading` tell whether a `$serve()` or `$read_loop()` loop is running, and `TailcatConnection$is_readable()` whether a TCP read would return at once.
+- `allowed_clients` and `$allow_client()` take `tailcat_keys` objects as well as public key strings.
+- Subsetting a `tailcat_secret` with `[` or `[[`, and combining with `c()`, keep it a secret. `tailcat_build_info()` prints as a short summary.
 - `tailcat_wait()` and `tailcat_run()` run the later event loop from a script, until a promise settles or a condition holds.
-- The options `rtailcat.region` and `rtailcat.derp_map_url` set the relay for servers and clients created without those arguments.
+- The options `rtailcat.region` and `rtailcat.relay_map_url` set the relay for servers and clients created without those arguments.
 - `tailcat_udp_max_payload()` gives the largest UDP datagram (1232 bytes).
 
 ## Departures from the C ABI
 
 - `timeout = 0` is a non-blocking poll (data already received, a connection already waiting) rather than an already expired deadline.
 - `TailcatClient$ping()` returns seconds rather than milliseconds, like `$disco_ping()` and the timeouts.
-- Field names in the results of `$info()`, `$disco_ping()`, and `tailcat_address_parse()` are snake_case (`relay_port`, `relay_region_id`, and so on) instead of tailcat's JSON names; `tailcat_build_info()$raw` keeps Go's own names.
+- `TailcatClient$disco_ping()` reports a ping that went through a relay as `direct = FALSE` with `endpoint = NA`, rather than as an empty `endpoint`.
+- Field names in the results of `$info()`, `$disco_ping()`, and `tailcat_address_parse()` are snake_case (`relay_port`, `relay_region_id`, and so on) instead of tailcat's JSON names, and the relay map argument and option are `relay_map_url` and `rtailcat.relay_map_url` rather than `derp_map_url`; `tailcat_build_info()$raw` keeps Go's own names.

@@ -5,10 +5,10 @@
 #'
 #' Accepted connections belong to the server rather than the listener: closing the listener stops new connections but leaves accepted ones open, while closing the server closes everything.
 #'
-#' Once the listener or its server is closed, every method other than `$close()`, `$stop_serving()`, `$format()`, and `$print()`, and every field other than `$is_closed` and `$server`, raises a `tailcat_closed` error. Timeouts (including `timeout = 0`, a poll) and errors are described in [TailcatServer].
+#' Once the listener or its server is closed, every method other than `$close()`, `$stop_serving()`, `$format()`, and `$print()`, and every field other than `$is_closed`, `$is_serving`, and `$server`, raises a `tailcat_closed` error. Timeouts (including `timeout = 0`, a poll) and errors are described in [TailcatServer].
 #'
 #' @section Serving connections:
-#' `$serve(handler)` starts an accept loop driven by the later event loop and returns immediately. Each new connection is passed to `handler(conn)` on the main R thread. The loop only makes progress while the event loop runs: when R is idle at the console, inside Shiny or httpuv, or while a script calls [later::run_now()] in a loop. Blocking calls inside the handler (such as `conn$read()`) hold up the loop until they return, so long-running handlers should use the `_async()` methods and return the resulting promise. A handler may return a promise (or anything [promises::is.promising()] accepts): if it rejects, the rejection is treated like an error signaled by the handler, so `on_error` is called and the connection is closed. The loop does not wait for the promise before accepting the next connection. The loop ends quietly when the listener or the server is closed, or when `$stop_serving()` is called; `$stop_serving()` leaves the listener open, so it can accept connections again or serve with a new handler.
+#' `$serve(handler)` starts an accept loop driven by the later event loop and returns immediately. Each new connection is passed to `handler(conn)` on the main R thread. The loop only makes progress while the event loop runs: when R is idle at the console, inside Shiny or httpuv, or while a script calls [later::run_now()] in a loop. Blocking calls inside the handler (such as `conn$read()`) hold up the loop until they return, so long-running handlers should use the `_async()` methods and return the resulting promise. A handler may return a promise (or anything [promises::is.promising()] accepts): if it rejects, the rejection is treated like an error signaled by the handler, so `on_error` is called and the connection is closed. The loop does not wait for the promise before accepting the next connection. The loop ends quietly when the listener or the server is closed, or when `$stop_serving()` is called; `$stop_serving()` leaves the listener open, so it can accept connections again or serve with a new handler. `$is_serving` tells whether a loop is running.
 #'
 #' @examples
 #' \dontrun{
@@ -16,8 +16,7 @@
 #' lst = srv$listen(7)
 #' lst$serve(function(conn) {
 #'   promises::then(conn$read_all_async(timeout = 30), function(data) {
-#'     conn$write(data)
-#'     conn$close()
+#'     conn$write(data)$close()
 #'   })
 #' })
 #' srv$address
@@ -190,6 +189,11 @@ TailcatListener = R6::R6Class(
     server = function(value) {
       private$read_only("server", value)
       private$owner
+    },
+    #' @field is_serving `TRUE` while an accept loop started by `$serve()` is running, `FALSE` otherwise, including once the listener is closed.
+    is_serving = function(value) {
+      private$read_only("is_serving", value)
+      private$serving && !self$is_closed
     },
     #' @field is_closed `TRUE` once the listener or its server has been closed.
     is_closed = function(value) {

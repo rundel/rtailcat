@@ -99,10 +99,10 @@ relay_server = function(env = parent.frame(), ...) {
 }
 
 relay_client = function(address, env = parent.frame(), ...) {
-  local_client(address, env = env, derp_map_url = relay_derp_map_url(), ...)
+  local_client(address, env = env, relay_map_url = relay_map_url(), ...)
 }
 
-relay_derp_map_url = function() {
+relay_map_url = function() {
   if (is.null(relay_region())) NULL else "none"
 }
 
@@ -185,7 +185,7 @@ child_r = function(code) {
   setup = c(
     "region = Sys.getenv('RTAILCAT_TEST_REGION')",
     "region = if (nzchar(region)) jsonlite::fromJSON(region, simplifyVector = FALSE) else NULL",
-    "derp_map_url = if (is.null(region)) NULL else 'none'"
+    "relay_map_url = if (is.null(region)) NULL else 'none'"
   )
   processx::process$new(
     file.path(R.home("bin"), "Rscript"),

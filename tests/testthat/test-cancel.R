@@ -92,7 +92,7 @@ test_that("a stale cancel handle cannot cancel a later operation", {
   pair = connect_pair(lst, cl, 8093)
 
   old = pair$client$write_async("done")
-  expect_identical(wait_for(old, 20), 4L)
+  expect_identical(wait_for(old, 20), pair$client)
   expect_identical(pair$server$read(timeout = 20, as = "text"), "done")
 
   pending = pair$server$read_async(timeout = 20, as = "text")
@@ -102,7 +102,7 @@ test_that("a stale cancel handle cannot cancel a later operation", {
   run_until(\() FALSE, 0.3)
   pair$client$write("later")
   expect_identical(wait_for(pending, 20), "later")
-  expect_identical(wait_for(old, 1), 4L)
+  expect_identical(wait_for(old, 1), pair$client)
 
   info = srv$info_async()
   value = wait_for(info, 10)

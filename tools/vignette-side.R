@@ -18,7 +18,7 @@ local({
   # The vignette code uses the public relays; point it at the test relay instead.
   region = Sys.getenv("RTAILCAT_TEST_REGION")
   if (nzchar(region)) {
-    options(rtailcat.region = region, rtailcat.derp_map_url = "none")
+    options(rtailcat.region = region, rtailcat.relay_map_url = "none")
   }
 
   for (f in list.files(examples, pattern = "[.]R$", full.names = TRUE)) {

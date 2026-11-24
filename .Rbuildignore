@@ -22,3 +22,5 @@
 ^\.lintr$
 ^logo$
 ^vignettes/\.quarto$
+^README\.qmd$
+^\.quarto$

@@ -28,16 +28,16 @@ tailcat_address_parse = function(address) {
 #' Returns a self-contained version of `address` with the relay (DERP) details embedded, fetching the relay map if needed. A resolved address avoids relay map discovery when a client connects, although connecting still needs network access. The result is a secret, like the input.
 #'
 #' @inheritParams tailcat_address_parse
-#' @param derp_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.derp_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
+#' @param relay_map_url URL of a relay map to use instead of the default, or `NULL` to use the `rtailcat.relay_map_url` option (see the section on relay options in [TailcatServer]) or, when that is unset, the default.
 #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls (see the section on timeouts in [TailcatServer]).
 #' @return `tailcat_address_resolve()` returns the resolved address as a [tailcat_secret]. `tailcat_address_resolve_async()` returns a [promises::promise()] that resolves with it.
 #' @export
-tailcat_address_resolve = function(address, derp_map_url = NULL, timeout = 30) {
+tailcat_address_resolve = function(address, relay_map_url = NULL, timeout = 30) {
   address = check_address(address)
-  derp_map_url = check_derp_map_url(derp_map_url)
+  relay_map_url = check_relay_map_url(relay_map_url)
   timeout = check_timeout(timeout)
   new_secret(rtc_value(
-    rtc_address_resolve(address, derp_map_url, timeout, NULL),
+    rtc_address_resolve(address, relay_map_url, timeout, NULL),
     op = "resolve the address",
     arg = "address",
     timeout = timeout
@@ -46,12 +46,12 @@ tailcat_address_resolve = function(address, derp_map_url = NULL, timeout = 30) {
 
 #' @rdname tailcat_address_resolve
 #' @export
-tailcat_address_resolve_async = function(address, derp_map_url = NULL, timeout = 30) {
+tailcat_address_resolve_async = function(address, relay_map_url = NULL, timeout = 30) {
   address = check_address(address)
-  derp_map_url = check_derp_map_url(derp_map_url)
+  relay_map_url = check_relay_map_url(relay_map_url)
   timeout = check_timeout(timeout)
   rtc_promise(
-    \(callback) rtc_address_resolve(address, derp_map_url, timeout, callback),
+    \(callback) rtc_address_resolve(address, relay_map_url, timeout, callback),
     new_secret,
     op = "resolve the address",
     arg = "address",

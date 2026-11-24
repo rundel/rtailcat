@@ -11,7 +11,7 @@ format_bytes = function(n) {
 }
 
 wormhole_send = function(x, timeout = 600) {
-  # Sends an R object to one receiver and waits until it confirms
+  # Sends an R object to one receiver, waits until it confirms, and returns the object
 
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)
@@ -32,10 +32,11 @@ wormhole_send = function(x, timeout = 600) {
   # ends the stream or resets it, so a failure also counts as no confirmation
   payload = serialize(x, NULL)
   reply = tryCatch(
-    {
-      conn$write_message(payload, timeout = timeout)
-      conn$read_message(timeout = timeout, as = "text", max_bytes = 16)
-    },
+    conn$write_message(payload, timeout = timeout)$read_message(
+      timeout = timeout,
+      as = "text",
+      max_bytes = 16
+    ),
     tailcat_failure = \(e) NULL
   )
   if (!identical(reply, "ok")) {
@@ -44,7 +45,7 @@ wormhole_send = function(x, timeout = 600) {
   conn$close()
   srv$close(drain = 5)
   cli::cli_inform("Sent {format_bytes(length(payload))}.")
-  invisible(TRUE)
+  invisible(x)
 }
 
 wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
@@ -76,7 +77,6 @@ wormhole_receive = function(address, max_bytes = 1e9, timeout = 600) {
   value = unserialize(payload)
   cli::cli_inform("Received {format_bytes(length(payload))}.")
 
-  conn$write_message("ok", timeout = 60)
-  conn$close_write()
+  conn$write_message("ok", timeout = 60)$close_write()
   value
 }

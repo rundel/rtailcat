@@ -2,7 +2,7 @@ test_that("keys round-trip through an owner-only JSON file", {
   dir = withr::local_tempdir()
   path = file.path(dir, "sub", "keys.json")
   keys = tailcat_keygen()
-  expect_identical(tailcat_keys_save(keys, path), path)
+  expect_identical(expect_invisible(tailcat_keys_save(keys, path)), keys)
   loaded = tailcat_keys_load(path)
   expect_s3_class(loaded, "tailcat_keys")
   expect_s3_class(loaded$private_key, "tailcat_secret")
@@ -70,7 +70,8 @@ test_that("saving and loading keys check their input", {
 test_that("an address round-trips through an owner-only file", {
   address = gsub("\n", "", tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)))
   path = file.path(withr::local_tempdir(), "address")
-  expect_identical(tailcat_address_write(new_secret(address), path), path)
+  secret = new_secret(address)
+  expect_identical(expect_invisible(tailcat_address_write(secret, path)), secret)
   expect_identical(readLines(path), address)
   read = tailcat_address_read(path)
   expect_s3_class(read, "tailcat_secret")
@@ -118,7 +119,7 @@ test_that("tailcat_address_write() takes a started server", {
   srv = relay_server()
   srv$start()
   path = file.path(withr::local_tempdir(), "address")
-  tailcat_address_write(srv, path)
+  expect_identical(tailcat_address_write(srv, path), srv)
   expect_identical(tailcat_reveal(tailcat_address_read(path)), tailcat_reveal(srv$address))
   unstarted = relay_server()
   expect_error(tailcat_address_write(unstarted, file.path(dirname(path), "other")), "not started")
@@ -183,20 +184,20 @@ test_that("invalid relay options are reported as options", {
     "rtailcat.region.*not valid JSON",
     class = "tailcat_invalid_argument"
   )
-  withr::local_options(rtailcat.region = NULL, rtailcat.derp_map_url = c("a", "b"))
+  withr::local_options(rtailcat.region = NULL, rtailcat.relay_map_url = c("a", "b"))
   address = tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10))
   expect_error(
     TailcatClient$new(address),
-    "rtailcat.derp_map_url",
+    "rtailcat.relay_map_url",
     class = "tailcat_invalid_argument"
   )
-  expect_error(TailcatServer$new(), "rtailcat.derp_map_url", class = "tailcat_invalid_argument")
+  expect_error(TailcatServer$new(), "rtailcat.relay_map_url", class = "tailcat_invalid_argument")
   expect_error(
     tailcat_address_resolve(address),
-    "rtailcat.derp_map_url",
+    "rtailcat.relay_map_url",
     class = "tailcat_invalid_argument"
   )
-  cl = TailcatClient$new(address, derp_map_url = "https://example.invalid/map.json")
+  cl = TailcatClient$new(address, relay_map_url = "https://example.invalid/map.json")
   expect_false(cl$is_closed)
   cl$close()
 })
@@ -206,7 +207,7 @@ test_that("the relay options configure servers and clients created without relay
   skip_if(is.null(relay_region()), "the public relays need no options")
   withr::local_options(
     rtailcat.region = relay_region(),
-    rtailcat.derp_map_url = relay_derp_map_url()
+    rtailcat.relay_map_url = relay_map_url()
   )
   srv = TailcatServer$new()
   on.exit(srv$close(), add = TRUE)

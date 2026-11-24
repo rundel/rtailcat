@@ -7,10 +7,8 @@ proxy_send = function(conn, head, body) {
   # Sends one request or response: a JSON head, then the body as its own message
 
   head$headers = I(head$headers)
-  head |>
-    jsonlite::toJSON(auto_unbox = TRUE) |>
-    conn$write_message(timeout = 60)
-  conn$write_message(body, timeout = 60)
+  head = jsonlite::toJSON(head, auto_unbox = TRUE)
+  conn$write_message(head, timeout = 60)$write_message(body, timeout = 60)
 }
 
 proxy_receive = function(conn, max_bytes) {
@@ -104,7 +102,31 @@ proxy_share = function(app_port, max_bytes = 1e8) {
     "Sharing the app on port {app_port}. Address for the other machine:",
     "{address}"
   ))
-  invisible(srv)
+  new_proxy(srv, paste("sharing the app on port", app_port))
+}
+
+new_proxy = function(node, what, http = NULL) {
+  # One end of a proxy: its tailcat server or client, and on the opening side the local web server
+
+  structure(list(node = node, what = what, http = http), class = "proxy")
+}
+
+print.proxy = function(x, ...) {
+  # Shows what the proxy does, and whether it has been closed
+
+  state = if (x$node$is_closed) " (closed)" else ""
+  cat("<proxy> ", x$what, state, "\n", sep = "")
+  invisible(x)
+}
+
+proxy_close = function(proxy) {
+  # Stops either end of a proxy and returns it
+
+  if (!is.null(proxy$http)) {
+    httpuv::stopServer(proxy$http)
+  }
+  proxy$node$close()
+  invisible(proxy)
 }
 
 proxy_fetch = function(cl, req) {
@@ -140,15 +162,7 @@ proxy_open = function(address, port = 8080L) {
   # Serves the app shared at `address` on http://127.0.0.1:`port` of this machine
 
   cl = TailcatClient$new(address)
-  server = httpuv::startServer("127.0.0.1", port, list(call = \(req) proxy_fetch(cl, req)))
+  http = httpuv::startServer("127.0.0.1", port, list(call = \(req) proxy_fetch(cl, req)))
   cli::cli_inform("Open {.url http://127.0.0.1:{port}} to use the app on the other machine.")
-  structure(list(client = cl, server = server), class = "proxy")
-}
-
-proxy_close = function(proxy) {
-  # Stops the local server and disconnects from the other machine
-
-  httpuv::stopServer(proxy$server)
-  proxy$client$close()
-  invisible()
+  new_proxy(cl, paste0("serving http://127.0.0.1:", port), http)
 }

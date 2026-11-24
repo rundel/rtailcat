@@ -13,7 +13,7 @@ expect_format_matches_print = function(x) {
 test_that("format() of servers and clients matches print() when never started, closed, and restored", {
   map_url = silent_map_url()
   keys = tailcat_keygen()
-  srv = TailcatServer$new(key = keys, derp_map_url = map_url)
+  srv = TailcatServer$new(key = keys, relay_map_url = map_url)
   on.exit(srv$close(), add = TRUE)
   cl = TailcatClient$new(tc_address(list(p = as.raw(1:32), k = as.raw(33:64), i = 10)), key = keys)
   on.exit(cl$close(), add = TRUE)
@@ -108,7 +108,7 @@ test_that("printing a connection after both sides half-close prints no Go stack 
   child = child_r(c(
     "srv = TailcatServer$new(region = region)",
     "lst = srv$listen(0)",
-    "cl = TailcatClient$new(srv$address, derp_map_url = derp_map_url)",
+    "cl = TailcatClient$new(srv$address, relay_map_url = relay_map_url)",
     "pending = lst$accept_async(timeout = 30)",
     "cc = cl$dial(lst$port, timeout = 30)",
     "sc = NULL",

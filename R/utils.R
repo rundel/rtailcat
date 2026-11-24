@@ -157,7 +157,9 @@ is_tailcat_object = function(x, classes) {
 parse_disco_ping = function(text) {
   x = parse_json(text)
   x$latency = as.double(x$latency)
-  x
+  x$endpoint = if (is_nonempty_string(x$endpoint)) x$endpoint else NA_character_
+  x$direct = !is.na(x$endpoint)
+  x[union(c("latency", "direct", "endpoint"), names(x))]
 }
 
 parse_json = function(json) {

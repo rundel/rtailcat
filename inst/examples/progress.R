@@ -2,17 +2,17 @@
 # Edit the vignette, not this file
 
 progress_record = function(monitor, datagram) {
-  # Stores one report, ignoring datagrams that are not JSON objects
+  # Stores one report, ignoring datagrams that are not JSON objects naming their job
 
   event = tryCatch(
     datagram |> rawToChar() |> jsonlite::fromJSON(),
     error = \(e) NULL
   )
-  if (is.list(event)) {
-    event$received = Sys.time()
+  if (is.list(event) && is.character(event$job) && length(event$job) == 1) {
     monitor$events[[length(monitor$events) + 1]] = event
+    monitor$last_seen[[event$job]] = Sys.time()
   }
-  invisible()
+  invisible(monitor)
 }
 
 progress_monitor = function(port = 9000L) {
@@ -22,7 +22,9 @@ progress_monitor = function(port = 9000L) {
   lst = srv$listen(port, network = "udp")
   monitor = new.env(parent = emptyenv())
   monitor$server = srv
+  monitor$listener = lst
   monitor$events = list()
+  monitor$last_seen = list()
 
   # A failed flow is closed anyway and there is no one to tell, so its error is
   # dropped instead of becoming a warning
@@ -41,38 +43,37 @@ progress_monitor = function(port = 9000L) {
 }
 
 progress_data = function(monitor) {
-  # Returns the reports as a data frame with one row per report, ordered by job and sequence number
+  # Returns the reports as a tibble with one row per report, ordered by job and sequence number
 
   events = monitor$events
   if (length(events) == 0) {
-    return(data.frame())
+    return(tibble::tibble(job = character(), seq = integer()))
   }
 
   # Reports may carry different fields
   cols = events |> lapply(names) |> unlist() |> unique()
   rows = lapply(events, \(e) {
     e[setdiff(cols, names(e))] = NA
-    as.data.frame(e[cols])
+    tibble::as_tibble(e[cols])
   })
   out = do.call(rbind, rows)
-  out = out[order(out$job, out$seq), , drop = FALSE]
-  rownames(out) = NULL
-  out
+  out[order(out$job, out$seq), ]
 }
 
 progress_stop = function(monitor) {
-  # Stops collecting reports and closes the monitor's server
+  # Stops collecting reports, closes the monitor's server, and returns the monitor
 
   monitor$server$close()
-  invisible()
+  invisible(monitor)
 }
 
 print.progress_monitor = function(x, ...) {
-  # Shows how many reports have arrived from how many jobs
+  # Shows how many reports have arrived from how many jobs, and whether more can arrive
 
   n = length(x$events)
-  jobs = vapply(x$events, \(e) e$job, character(1)) |> unique() |> length()
-  "<progress monitor> {n} report{?s} from {jobs} job{?s}" |>
+  jobs = length(x$last_seen)
+  state = if (x$listener$is_serving) "collecting" else "stopped"
+  "<progress monitor> {n} report{?s} from {jobs} job{?s} ({state})" |>
     cli::pluralize() |>
     cat("\n", sep = "")
   invisible(x)
@@ -87,48 +88,49 @@ progress_reporter = function(address, job, port = 9000L) {
   reporter$conn = cl$dial(port, network = "udp", timeout = 60)
   reporter$job = job
   reporter$seq = 0L
+  reporter$unsent = 0L
   reporter
 }
 
-progress_report = function(reporter, ...) {
-  # Sends one report with the fields in `...` and returns whether it was sent
+progress_report = function(.reporter, ...) {
+  # Sends one report with the fields in `...` and returns the reporter
 
-  reporter$seq = reporter$seq + 1L
-  event = list(
-    job = reporter$job,
-    seq = reporter$seq,
-    sent = as.numeric(Sys.time()),
-    ...
-  )
-  payload = event |>
+  fields = list(...)
+  reserved = intersect(names(fields), c("job", "seq"))
+  if (length(reserved) > 0) {
+    cli::cli_abort("A report cannot have {cli::qty(reserved)}field{?s} named {.field {reserved}}.")
+  }
+  seq = .reporter$seq + 1L
+  .reporter$seq = seq
+  payload = c(list(job = .reporter$job, seq = seq), fields) |>
     jsonlite::toJSON(auto_unbox = TRUE, digits = NA) |>
     charToRaw()
   limit = tailcat_udp_max_payload()
   if (length(payload) > limit) {
     cli::cli_warn(c(
-      "Report {reporter$seq} was not sent.",
+      "Report {seq} was not sent.",
       "i" = "It is {length(payload)} bytes; a datagram holds at most {limit}."
     ))
-    return(invisible(FALSE))
+    .reporter$unsent = .reporter$unsent + 1L
+    return(invisible(.reporter))
   }
 
   # Monitoring must never slow down or stop the job, so a failed send is
-  # given up after a second and otherwise ignored
-  sent = tryCatch(
-    {
-      reporter$conn$write(payload, timeout = 1)
-      TRUE
-    },
-    error = \(e) FALSE
+  # given up after a second and only counted
+  tryCatch(
+    .reporter$conn$write(payload, timeout = 1),
+    error = \(e) {
+      .reporter$unsent = .reporter$unsent + 1L
+    }
   )
-  invisible(sent)
+  invisible(.reporter)
 }
 
 progress_done = function(reporter) {
-  # Disconnects the reporter from the monitor
+  # Disconnects the reporter from the monitor and returns the reporter
 
   reporter$client$close()
-  invisible()
+  invisible(reporter)
 }
 
 progress_app = function(monitor, x = "iter", y = "loss") {
@@ -167,9 +169,9 @@ progress_app = function(monitor, x = "iter", y = "loss") {
     output$latest = shiny::renderTable({
       d = data()
       shiny::req(nrow(d) > 0)
-      last = !duplicated(d$job, fromLast = TRUE)
-      latest = d[last, setdiff(names(d), c("sent", "received")), drop = FALSE]
-      latest$age = difftime(Sys.time(), d$received[last], units = "secs") |>
+      latest = d[!duplicated(d$job, fromLast = TRUE), ]
+      seen = do.call(c, monitor$last_seen[latest$job])
+      latest$age = difftime(Sys.time(), seen, units = "secs") |>
         as.double() |>
         round() |>
         paste("s")

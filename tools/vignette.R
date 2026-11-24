@@ -1,9 +1,10 @@
-# Keeps vignettes/building-on-rtailcat.qmd and inst/examples/ in sync and
-# checks the vignette's recorded output. Run from the package root:
+# Keeps vignettes/building-on-rtailcat.qmd and inst/examples/ in sync, checks
+# the recorded output of the vignette and of README.qmd, and renders README.md
+# from README.qmd. Run from the package root:
 #
 #   Rscript tools/vignette.R            # report differences, exit 1 if any
-#   Rscript tools/vignette.R --update   # rewrite inst/examples/ and the output
-#   Rscript tools/vignette.R remote     # limit the run to some examples
+#   Rscript tools/vignette.R --update   # rewrite inst/examples/, the output, and README.md
+#   Rscript tools/vignette.R wormhole   # limit the run to some examples
 #
 # The vignette is the source. Cells labeled <example>-def-<name> define the
 # example functions and are concatenated into inst/examples/<example>.R. Cells
@@ -13,6 +14,12 @@
 # the other side, so later cells start without waiting for it to finish; a
 # cell with `run: false` is not run. Each cell's code is the code without its
 # `#>` lines, and its new content is the code interleaved with the output.
+# A cell with `needs: <file>` gets that file copied from the other side's
+# working directory before it runs, standing in for handing a file over.
+#
+# README.qmd holds usage cells only, run the same way (its examples are named
+# by the first part of their labels, like the vignette's). README.md is
+# rendered from it with quarto, which needs the quarto command.
 #
 # Values that change from run to run are replaced with placeholders: tailcat
 # addresses become tcAbC...xYz, tcDeF...uVw, ... and public keys nodekey:3f1c...9a0e,
@@ -20,7 +27,7 @@
 # placeholders in its code are replaced with the real values seen so far, so
 # the vignette can show `wormhole_receive("tcAbC...xYz")`.
 #
-# Needs q2r (github.com/rundel/q2r), pkgload, processx, evaluate, withr, Go.
+# Needs q2r (github.com/rundel/q2r), pkgload, processx, evaluate, withr, Go, quarto.
 
 address_placeholders = c("tcAbC...xYz", "tcDeF...uVw", "tcGhI...rSt", "tcJkL...oPq")
 key_placeholders = c(
@@ -33,6 +40,8 @@ address_pattern = "tc[A-Za-z0-9_-]{40,}"
 key_pattern = "nodekey:[0-9a-f]{64}"
 
 vignette_path = file.path("vignettes", "building-on-rtailcat.qmd")
+readme_path = "README.qmd"
+readme_output = "README.md"
 side_script = file.path("tools", "vignette-side.R")
 examples_dir = file.path("inst", "examples")
 
@@ -51,6 +60,9 @@ main = function(args) {
   cells = vignette_cells(vignette_path)
   defs = example_files(cells)
   ok = sync_examples(defs, update)
+  if (file.exists(readme_path)) {
+    cells = c(cells, vignette_cells(readme_path))
+  }
 
   usage = Filter(\(cell) !is.null(cell$side) && !identical(cell$opts$run, FALSE), cells)
   names = unique(vapply(usage, \(cell) cell$example, character(1)))
@@ -98,7 +110,11 @@ main = function(args) {
     }
   }
   if (length(changed) > 0 && update) {
-    rewrite_cells(vignette_path, new_code[changed])
+    paths = vapply(usage, \(cell) cell$path, character(1))
+    labels = vapply(usage, \(cell) cell$label, character(1))
+    for (path in unique(paths[labels %in% changed])) {
+      rewrite_cells(path, new_code[intersect(changed, labels[paths == path])])
+    }
     message(
       "Updated the output of ",
       length(changed),
@@ -109,6 +125,7 @@ main = function(args) {
   if (length(changed) == 0) {
     message("The recorded output is up to date")
   }
+  ok = render_readme(update) && ok
   if (!update && (!ok || length(changed) > 0)) {
     message("Run `Rscript tools/vignette.R --update` to apply these changes")
     quit(status = 1)
@@ -127,6 +144,7 @@ vignette_cells = function(path) {
     opts = q2r::cell_options(block)
     def = regmatches(label, regexec("^([a-z]+)-def-", label))[[1]]
     list(
+      path = path,
       label = label,
       opts = opts,
       code = q2r::cell_code(block),
@@ -281,6 +299,12 @@ run_example = function(cells, root, defs_dir, region) {
       }
     }
 
+    for (file in cell$opts$needs) {
+      found = \() Filter(file.exists, file.path(work, setdiff(sides, cell$side), "wd", file))
+      wait(\() length(found()) > 0, paste("the file", file, "needed by", cell$label), 60)
+      file.copy(found()[[1]], file.path(work, cell$side, "wd", file), overwrite = TRUE)
+    }
+
     counter[[cell$side]] = counter[[cell$side]] + 1L
     index[[k]] = counter[[cell$side]]
     cmd = file.path(work, cell$side, paste0("cell-", index[[k]], ".R"))
@@ -316,6 +340,29 @@ run_example = function(cells, root, defs_dir, region) {
   stats::setNames(result, vapply(cells, \(cell) cell$label, character(1)))
 }
 
+# Renders README.md from README.qmd. Without `update` a README.md that would
+# change is reported and put back as it was.
+render_readme = function(update) {
+  if (!file.exists(readme_path)) {
+    return(TRUE)
+  }
+  old = if (file.exists(readme_output)) readLines(readme_output, warn = FALSE) else character()
+  status = system2("quarto", c("render", readme_path), stdout = FALSE, stderr = FALSE)
+  if (status != 0) {
+    stop("quarto could not render ", readme_path, call. = FALSE)
+  }
+  if (identical(old, readLines(readme_output, warn = FALSE))) {
+    return(TRUE)
+  }
+  if (update) {
+    message("Updated ", readme_output)
+    return(TRUE)
+  }
+  writeLines(old, readme_output)
+  message(readme_output, " is out of date")
+  FALSE
+}
+
 strip_output = function(code) {
   lines = strsplit(code, "\n", fixed = TRUE)[[1]]
   paste(lines[!grepl("^#>", lines)], collapse = "\n")
@@ -340,6 +387,8 @@ normalize = function(lines, map) {
   for (i in seq_len(nrow(map))) {
     lines = gsub(map$value[[i]], map$placeholder[[i]], lines, fixed = TRUE)
   }
+  # Printed tables pad their last column
+  lines = sub("[ \t]+$", "", lines)
   while (length(lines) > 0 && !nzchar(trimws(lines[[length(lines)]]))) {
     lines = lines[-length(lines)]
   }

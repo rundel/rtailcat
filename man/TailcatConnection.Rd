@@ -12,9 +12,7 @@ One read and one write may be in flight at the same time (for example a pending 
 
 \verb{$client} or \verb{$server} (the other is \code{NULL}) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.
 
-Once the connection, or the client or server that owns it, is closed, every method other than \verb{$close()}, \verb{$format()}, and \verb{$print()}, and every field other than \verb{$is_closed}, \verb{$client}, and \verb{$server}, raises a \code{tailcat_closed} error; nothing is kept from before. Timeouts (including \code{timeout = 0}, a poll) and errors are described in \link{TailcatServer}.
-
-Because of an upstream tailcat bug, \verb{$info()} (and so \verb{$local_address} and \verb{$remote_address}) fails with \code{tailcat_failure}, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called \verb{$close_write()}). \verb{$print()} and \verb{$format()} avoid this by leaving the endpoints out once \verb{$close_write()} has succeeded on the connection.
+Once the connection, or the client or server that owns it, is closed, every method other than \verb{$close()}, \verb{$format()}, and \verb{$print()}, and every field other than \verb{$is_closed}, \verb{$is_reading}, \verb{$client}, and \verb{$server}, raises a \code{tailcat_closed} error; nothing is kept from before. Timeouts (including \code{timeout = 0}, a poll) and errors are described in \link{TailcatServer}.
 }
 \section{Messages}{
 
@@ -29,14 +27,13 @@ To send R objects, serialize them: \code{conn$write_message(serialize(x, NULL))}
 
 \verb{$read_loop(callback)} reads continuously, driven by the later event loop, and calls \code{callback(data)} on the main R thread with each chunk (TCP), each datagram (UDP), or with \code{messages = TRUE} each message. It is the reading counterpart of \code{TailcatListener$serve()} and makes progress under the same conditions: while R is idle at the console, inside Shiny or httpuv, or while a script runs the event loop (see \code{\link[=tailcat_run]{tailcat_run()}}). If \code{callback} returns a promise, the next read starts after it settles, so data is handled in order and a slow callback slows down reading rather than piling up work.
 
-The loop ends when the peer ends a TCP stream (\code{on_end} is then called), when the connection or its owner is closed, or when \verb{$stop_reading()} is called; the last two end it quietly. If a read fails or the callback fails, \code{on_error} is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
+The loop ends when the peer ends a TCP stream (\code{on_end} is then called), when the connection or its owner is closed, or when \verb{$stop_reading()} is called; the last two end it quietly. \verb{$is_reading} tells whether a loop is running. If a read fails or the callback fails, \code{on_error} is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
 }
 
 \examples{
 \dontrun{
 conn = TailcatClient$new(address)$dial(8080)
-conn$write("ping")
-conn$close_write()
+conn$write("ping")$close_write()
 conn$read_all(timeout = 10, as = "text")
 }
 }
@@ -52,6 +49,8 @@ conn$read_all(timeout = 10, as = "text")
     \item{\code{client}}{The \link{TailcatClient} that dialed the connection, or \code{NULL} for an accepted connection. Like \verb{$server}, it keeps working after the connection is closed.}
 
     \item{\code{server}}{The \link{TailcatServer} whose listener accepted the connection, or \code{NULL} for a dialed connection. It keeps working after the connection is closed.}
+
+    \item{\code{is_reading}}{\code{TRUE} while a read loop started by \verb{$read_loop()} is running, \code{FALSE} otherwise, including once the connection is closed.}
 
     \item{\code{is_closed}}{\code{TRUE} once the connection, or the client or server that owns it, has been closed.}
   }
@@ -77,7 +76,7 @@ conn$read_all(timeout = 10, as = "text")
     \item \href{#method-TailcatConnection-write_async}{\code{TailcatConnection$write_async()}}
     \item \href{#method-TailcatConnection-close_write}{\code{TailcatConnection$close_write()}}
     \item \href{#method-TailcatConnection-close_write_async}{\code{TailcatConnection$close_write_async()}}
-    \item \href{#method-TailcatConnection-readable}{\code{TailcatConnection$readable()}}
+    \item \href{#method-TailcatConnection-is_readable}{\code{TailcatConnection$is_readable()}}
     \item \href{#method-TailcatConnection-info}{\code{TailcatConnection$info()}}
     \item \href{#method-TailcatConnection-info_async}{\code{TailcatConnection$info_async()}}
     \item \href{#method-TailcatConnection-close}{\code{TailcatConnection$close()}}
@@ -279,7 +278,7 @@ If the stream ends before the first byte, \verb{$read_exact()} returns \code{NUL
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    The number of bytes in the message, not counting its length prefix, invisibly.
+    The connection, invisibly.
   }
 }
 
@@ -302,7 +301,7 @@ If the stream ends before the first byte, \verb{$read_exact()} returns \code{NUL
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    A promise resolving with the number of bytes in the message.
+    A promise resolving with the connection.
   }
 }
 
@@ -417,7 +416,7 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
 \if{html}{\out{<a id="method-TailcatConnection-write"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatConnection-write}{}}}
 \subsection{\code{TailcatConnection$write()}}{
-  Write all of \code{data}. On timeout or error the condition's \code{bytes} field gives the number of bytes already sent.
+  Write all of \code{data}: the call returns once everything has been sent, or raises. On timeout or error the condition's \code{bytes} field gives the number of bytes already sent.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{TailcatConnection$write(data, timeout = Inf)}
@@ -432,7 +431,7 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    The number of bytes written (an integer, or a double beyond the integer range), invisibly.
+    The connection, invisibly, so that calls chain (\code{conn$write(data)$close_write()}).
   }
 }
 
@@ -455,7 +454,7 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    A promise resolving with the number of bytes written.
+    A promise resolving with the connection.
   }
 }
 
@@ -504,13 +503,13 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TailcatConnection-readable"></a>}}
-\if{latex}{\out{\hypertarget{method-TailcatConnection-readable}{}}}
-\subsection{\code{TailcatConnection$readable()}}{
+\if{html}{\out{<a id="method-TailcatConnection-is_readable"></a>}}
+\if{latex}{\out{\hypertarget{method-TailcatConnection-is_readable}{}}}
+\subsection{\code{TailcatConnection$is_readable()}}{
   Check without waiting whether a TCP read would return immediately (buffered data, end of stream, or a pending error). Intended for checking idle connections, not as a readiness loop.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{TailcatConnection$readable()}
+    \preformatted{TailcatConnection$is_readable()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
@@ -522,7 +521,7 @@ If the stream ends cleanly between messages, \verb{$read_message()} returns \cod
 \if{html}{\out{<a id="method-TailcatConnection-info"></a>}}
 \if{latex}{\out{\hypertarget{method-TailcatConnection-info}{}}}
 \subsection{\code{TailcatConnection$info()}}{
-  Information about the connection. Because of an upstream tailcat bug it fails with \code{tailcat_failure} once both directions of a TCP connection have been shut down.
+  Information about the connection.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{TailcatConnection$info(timeout = 30)}

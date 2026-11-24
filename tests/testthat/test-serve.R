@@ -117,6 +117,28 @@ test_that("serve() checks its arguments and refuses a closed listener", {
   expect_error(lst$serve(\(conn) NULL), class = "tailcat_closed")
 })
 
+test_that("is_serving follows the accept loop and is FALSE once the listener is closed", {
+  skip_relay()
+  srv = relay_server()
+  lst = srv$listen(0)
+  expect_false(lst$is_serving)
+  lst$serve(\(conn) NULL)
+  expect_true(lst$is_serving)
+  lst$stop_serving()
+  expect_false(lst$is_serving)
+  lst$serve(\(conn) NULL)
+  expect_true(lst$is_serving)
+  expect_error(
+    {
+      lst$is_serving = FALSE
+    },
+    "read-only",
+    class = "tailcat_invalid_argument"
+  )
+  srv$close()
+  expect_false(lst$is_serving)
+})
+
 test_that("a tailcat error in a handler becomes a warning with the headline and detail", {
   skip_relay()
   srv = relay_server()

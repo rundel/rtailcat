@@ -7,11 +7,11 @@
 tailcat_build_info()
 }
 \value{
-A list with elements \code{abi_version} (the C ABI version, an integer), \code{go_version}, \code{tailcat_version}, and \code{raw}, the full Go build metadata exactly as Go reports it (with Go's own field names, such as \code{GoVersion}, \code{Main}, \code{Deps}, and \code{Settings}).
+A list of class \code{tailcat_build_info} with elements \code{abi_version} (the C ABI version, an integer), \code{go_version}, \code{tailcat_version}, and \code{raw}, the full Go build metadata exactly as Go reports it (with Go's own field names, such as \code{GoVersion}, \code{Main}, \code{Deps}, and \code{Settings}). Printing it shows the three versions and only summarizes \code{raw}.
 }
 \description{
 Build information for the embedded tailcat library
 }
 \examples{
-tailcat_build_info()[c("abi_version", "go_version", "tailcat_version")]
+tailcat_build_info()
 }

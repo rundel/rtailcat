@@ -134,7 +134,7 @@ test_that("real errors carry a headline, an unwrapped detail, and the user-facin
   )
 
   map_url = silent_map_url()
-  cl = TailcatClient$new(offline_address(), derp_map_url = map_url)
+  cl = TailcatClient$new(offline_address(), relay_map_url = map_url)
   on.exit(cl$close(), add = TRUE)
   ping = caught(cl$ping(timeout = 0))
   expect_s3_class(ping, "tailcat_timeout")
@@ -162,7 +162,7 @@ test_that("async rejections name the call and carry no backtrace", {
   ))
 
   map_url = silent_map_url()
-  live = TailcatClient$new(offline_address(), derp_map_url = map_url)
+  live = TailcatClient$new(offline_address(), relay_map_url = map_url)
   on.exit(live$close())
   cond = caught(wait_for(live$dial_async(80, timeout = 0), 10))
   expect_s3_class(cond, "tailcat_timeout")

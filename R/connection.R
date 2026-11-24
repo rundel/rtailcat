@@ -9,9 +9,7 @@
 #'
 #' `$client` or `$server` (the other is `NULL`) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.
 #'
-#' Once the connection, or the client or server that owns it, is closed, every method other than `$close()`, `$format()`, and `$print()`, and every field other than `$is_closed`, `$client`, and `$server`, raises a `tailcat_closed` error; nothing is kept from before. Timeouts (including `timeout = 0`, a poll) and errors are described in [TailcatServer].
-#'
-#' Because of an upstream tailcat bug, `$info()` (and so `$local_address` and `$remote_address`) fails with `tailcat_failure`, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called `$close_write()`). `$print()` and `$format()` avoid this by leaving the endpoints out once `$close_write()` has succeeded on the connection.
+#' Once the connection, or the client or server that owns it, is closed, every method other than `$close()`, `$format()`, and `$print()`, and every field other than `$is_closed`, `$is_reading`, `$client`, and `$server`, raises a `tailcat_closed` error; nothing is kept from before. Timeouts (including `timeout = 0`, a poll) and errors are described in [TailcatServer].
 #'
 #' @section Messages:
 #' TCP is a stream of bytes with no boundaries: one `$write()` may arrive as several reads, and several writes as one. `$write_message()` and `$read_message()` add boundaries, so that each `$read_message()` returns exactly what one `$write_message()` sent. On the wire a message is its length as 4 bytes (unsigned, big-endian, so a peer in another language can implement it in a few lines) followed by that many bytes. The protocol allows messages up to 4 GiB; rtailcat sends and accepts at most 2147483647 bytes (just under 2 GiB) per message.
@@ -23,13 +21,12 @@
 #' @section Read loops:
 #' `$read_loop(callback)` reads continuously, driven by the later event loop, and calls `callback(data)` on the main R thread with each chunk (TCP), each datagram (UDP), or with `messages = TRUE` each message. It is the reading counterpart of `TailcatListener$serve()` and makes progress under the same conditions: while R is idle at the console, inside Shiny or httpuv, or while a script runs the event loop (see [tailcat_run()]). If `callback` returns a promise, the next read starts after it settles, so data is handled in order and a slow callback slows down reading rather than piling up work.
 #'
-#' The loop ends when the peer ends a TCP stream (`on_end` is then called), when the connection or its owner is closed, or when `$stop_reading()` is called; the last two end it quietly. If a read fails or the callback fails, `on_error` is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
+#' The loop ends when the peer ends a TCP stream (`on_end` is then called), when the connection or its owner is closed, or when `$stop_reading()` is called; the last two end it quietly. `$is_reading` tells whether a loop is running. If a read fails or the callback fails, `on_error` is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.
 #'
 #' @examples
 #' \dontrun{
 #' conn = TailcatClient$new(address)$dial(8080)
-#' conn$write("ping")
-#' conn$close_write()
+#' conn$write("ping")$close_write()
 #' conn$read_all(timeout = 10, as = "text")
 #' }
 #' @export
@@ -159,7 +156,7 @@ TailcatConnection = R6::R6Class(
     #' @description Send `data` as one message (TCP only), for the peer to read with `$read_message()`. See the section on messages.
     #' @param data A raw vector, or a character vector which is pasted together without separators and sent as UTF-8. At most 2147483647 bytes.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls. On timeout or error the condition's `bytes` field gives the number of bytes already sent, counting the 4-byte length; the peer then sees a partial message, so close the connection.
-    #' @return The number of bytes in the message, not counting its length prefix, invisibly.
+    #' @return The connection, invisibly.
     write_message = function(data, timeout = Inf) {
       private$require_tcp("write_message")
       data = private$message_payload(data)
@@ -169,21 +166,21 @@ TailcatConnection = R6::R6Class(
         "write a message",
         timeout
       )
-      invisible(length(data))
+      invisible(self)
     },
 
     #' @description Asynchronous version of `$write_message()`.
     #' @param data A raw or character vector.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
-    #' @return A promise resolving with the number of bytes in the message.
+    #' @return A promise resolving with the connection.
     write_message_async = function(data, timeout = Inf) {
       private$require_tcp("write_message_async")
       data = private$message_payload(data)
       timeout = check_timeout(timeout)
-      size = length(data)
+      framed = c(encode_length(length(data)), data)
       private$promise(
-        \(callback) rtc_conn_write(private$handle, c(encode_length(size), data), timeout, callback),
-        \(x) size,
+        \(callback) rtc_conn_write(private$handle, framed, timeout, callback),
+        \(x) self,
         "write a message",
         timeout
       )
@@ -285,30 +282,27 @@ TailcatConnection = R6::R6Class(
       invisible(self)
     },
 
-    #' @description Write all of `data`. On timeout or error the condition's `bytes` field gives the number of bytes already sent.
+    #' @description Write all of `data`: the call returns once everything has been sent, or raises. On timeout or error the condition's `bytes` field gives the number of bytes already sent.
     #' @param data A raw vector, or a character vector which is pasted together without separators and sent as UTF-8.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls (sends what can be sent at once).
-    #' @return The number of bytes written (an integer, or a double beyond the integer range), invisibly.
+    #' @return The connection, invisibly, so that calls chain (`conn$write(data)$close_write()`).
     write = function(data, timeout = Inf) {
       data = private$payload(data)
       timeout = check_timeout(timeout)
-      invisible(private$check(
-        rtc_conn_write(private$handle, data, timeout, NULL),
-        "write",
-        timeout
-      ))
+      private$check(rtc_conn_write(private$handle, data, timeout, NULL), "write", timeout)
+      invisible(self)
     },
 
     #' @description Asynchronous version of `$write()`.
     #' @param data A raw or character vector.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
-    #' @return A promise resolving with the number of bytes written.
+    #' @return A promise resolving with the connection.
     write_async = function(data, timeout = Inf) {
       data = private$payload(data)
       timeout = check_timeout(timeout)
       private$promise(
         \(callback) rtc_conn_write(private$handle, data, timeout, callback),
-        identity,
+        \(x) self,
         "write",
         timeout
       )
@@ -344,12 +338,12 @@ TailcatConnection = R6::R6Class(
 
     #' @description Check without waiting whether a TCP read would return immediately (buffered data, end of stream, or a pending error). Intended for checking idle connections, not as a readiness loop.
     #' @return `TRUE` or `FALSE`.
-    readable = function() {
-      private$require_tcp("readable")
+    is_readable = function() {
+      private$require_tcp("is_readable")
       private$check(rtc_conn_readable(private$handle), "check whether the connection is readable")
     },
 
-    #' @description Information about the connection. Because of an upstream tailcat bug it fails with `tailcat_failure` once both directions of a TCP connection have been shut down.
+    #' @description Information about the connection.
     #' @param timeout Seconds to wait; `Inf` waits indefinitely and `0` polls.
     #' @return A list with `local_address`, `remote_address`, and `network`.
     info = function(timeout = 30) {
@@ -447,6 +441,11 @@ TailcatConnection = R6::R6Class(
     server = function(value) {
       private$read_only("server", value)
       if (inherits(private$owner, "TailcatServer")) private$owner else NULL
+    },
+    #' @field is_reading `TRUE` while a read loop started by `$read_loop()` is running, `FALSE` otherwise, including once the connection is closed.
+    is_reading = function(value) {
+      private$read_only("is_reading", value)
+      private$reading && !self$is_closed
     },
     #' @field is_closed `TRUE` once the connection, or the client or server that owns it, has been closed.
     is_closed = function(value) {

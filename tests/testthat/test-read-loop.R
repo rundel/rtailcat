@@ -16,6 +16,8 @@ test_that("read_loop() delivers TCP chunks in order and calls on_end at the end 
     pair$server
   )
   expect_match(printed(pair$server), "state:   open (reading)", fixed = TRUE)
+  expect_true(pair$server$is_reading)
+  expect_false(pair$client$is_reading)
   expect_error(pair$server$read_loop(identity), "already in a read loop", class = "tailcat_failure")
 
   big = as.raw(rep_len(0:255, 200000))
@@ -25,7 +27,11 @@ test_that("read_loop() delivers TCP chunks in order and calls on_end at the end 
   expect_identical(do.call(c, state$chunks), big)
   expect_false(pair$server$is_closed)
   expect_no_match(printed(pair$server), "reading", fixed = TRUE)
+  expect_false(pair$server$is_reading)
   expect_identical(pair$server$read_loop(identity), pair$server)
+  expect_true(pair$server$is_reading)
+  pair$server$close()
+  expect_false(pair$server$is_reading)
 })
 
 test_that("read_loop(messages = TRUE) delivers whole messages and waits for promises", {

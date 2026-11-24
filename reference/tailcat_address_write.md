@@ -34,8 +34,9 @@ tailcat_address_read(path)
 
 ## Value
 
-`tailcat_address_write()` returns `path`, invisibly.
-`tailcat_address_read()` returns the address as a
+`tailcat_address_write()` returns `address` as it was given (the server,
+or the address), invisibly. `tailcat_address_read()` returns the address
+as a
 [tailcat_secret](https://rundel.github.io/rtailcat/reference/tailcat_secret.md),
 after checking that it parses as a tailcat address.
 
@@ -62,6 +63,6 @@ srv$start()
 tailcat_address_write(srv, "~/.config/myjob/address")
 
 # In the job:
-cli = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
+cl = TailcatClient$new(tailcat_address_read("~/.config/myjob/address"))
 } # }
 ```

@@ -108,17 +108,17 @@ The relay used by servers and clients can be set once for the R session
 with options, instead of passing the same arguments to every `$new()`
 (including calls inside other packages' code). The option
 `rtailcat.region` is used by `TailcatServer$new()` when `region` is
-`NULL`, and `rtailcat.derp_map_url` by `TailcatServer$new()`,
+`NULL`, and `rtailcat.relay_map_url` by `TailcatServer$new()`,
 `TailcatClient$new()`, and
 [`tailcat_address_resolve()`](https://rundel.github.io/rtailcat/reference/tailcat_address_resolve.md)
-when `derp_map_url` is `NULL`. They take the same values as the
+when `relay_map_url` is `NULL`. They take the same values as the
 arguments, are read when the object is created, and are ignored when
 unset (`NULL`, the default). An argument given explicitly always wins;
 to go back to the default relays, unset the option.
 
 For example, a deployment that runs its own relay region can call
 `options(rtailcat.region = region)` at startup, and one that publishes
-its own relay map `options(rtailcat.derp_map_url = url)`.
+its own relay map `options(rtailcat.relay_map_url = url)`.
 
 ## Active bindings
 
@@ -131,7 +131,8 @@ its own relay map `options(rtailcat.derp_map_url = url)`.
 
 - `public_key`:
 
-  The server's public key, or `NA` before the server has started.
+  The server's public key. Errors if the server has not started, like
+  `$address`; test `$is_started` first when that is in doubt.
 
 - `is_started`:
 
@@ -189,7 +190,7 @@ started (by `$start()` or `$listen()`). Only arguments that are not
       preshared_key = NULL,
       region_id = NULL,
       region = NULL,
-      derp_map_url = NULL,
+      relay_map_url = NULL,
       allowed_clients = NULL,
       udp_idle_timeout = NULL
     )
@@ -227,16 +228,20 @@ started (by `$start()` or `$listen()`). Only arguments that are not
   of Tailscale's `DERPRegion` type (`RegionID`, `Nodes`, `HostName`,
   `DERPPort`, and so on).
 
-- `derp_map_url`:
+- `relay_map_url`:
 
   URL of a relay map to use instead of the default, or `NULL` to use the
-  `rtailcat.derp_map_url` option (see the section on relay options in
+  `rtailcat.relay_map_url` option (see the section on relay options in
   TailcatServer) or, when that is unset, the default.
 
 - `allowed_clients`:
 
-  Character vector of client public keys. If given, only these clients
-  may connect; otherwise anyone with the address may.
+  The clients that may connect: a character vector of client public
+  keys, a `tailcat_keys` object from
+  [`tailcat_keygen()`](https://rundel.github.io/rtailcat/reference/tailcat_keygen.md)
+  (whose public key is used), or a list of public keys and
+  `tailcat_keys` objects. If given, only these clients may connect;
+  otherwise anyone with the address may.
 
 - `udp_idle_timeout`:
 
@@ -358,7 +363,10 @@ only listed clients can register; existing connections are not affected.
 
 - `public_key`:
 
-  A client public key, for example `TailcatClient$public_key`.
+  A client public key, for example `TailcatClient$public_key`, or the
+  client's `tailcat_keys` object from
+  [`tailcat_keygen()`](https://rundel.github.io/rtailcat/reference/tailcat_keygen.md),
+  whose public key is used.
 
 - `timeout`:
 
@@ -382,7 +390,8 @@ Asynchronous version of `$allow_client()`.
 
 - `public_key`:
 
-  A client public key.
+  A client public key or `tailcat_keys` object, as for
+  `$allow_client()`.
 
 - `timeout`:
 

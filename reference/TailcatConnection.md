@@ -31,17 +31,10 @@ accepted it.
 
 Once the connection, or the client or server that owns it, is closed,
 every method other than `$close()`, `$format()`, and `$print()`, and
-every field other than `$is_closed`, `$client`, and `$server`, raises a
-`tailcat_closed` error; nothing is kept from before. Timeouts (including
-`timeout = 0`, a poll) and errors are described in
+every field other than `$is_closed`, `$is_reading`, `$client`, and
+`$server`, raises a `tailcat_closed` error; nothing is kept from before.
+Timeouts (including `timeout = 0`, a poll) and errors are described in
 [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md).
-
-Because of an upstream tailcat bug, `$info()` (and so `$local_address`
-and `$remote_address`) fails with `tailcat_failure`, and the Go runtime
-prints a stack trace to standard error, on a TCP connection whose two
-directions have both been shut down (both sides called
-`$close_write()`). `$print()` and `$format()` avoid this by leaving the
-endpoints out once `$close_write()` has succeeded on the connection.
 
 ## Messages
 
@@ -82,10 +75,10 @@ rather than piling up work.
 
 The loop ends when the peer ends a TCP stream (`on_end` is then called),
 when the connection or its owner is closed, or when `$stop_reading()` is
-called; the last two end it quietly. If a read fails or the callback
-fails, `on_error` is called, the loop stops, and the connection is
-closed. While a read loop runs, other reads on the connection would
-interleave with it, so only write.
+called; the last two end it quietly. `$is_reading` tells whether a loop
+is running. If a read fails or the callback fails, `on_error` is called,
+the loop stops, and the connection is closed. While a read loop runs,
+other reads on the connection would interleave with it, so only write.
 
 ## Active bindings
 
@@ -116,6 +109,11 @@ interleave with it, so only write.
   [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md)
   whose listener accepted the connection, or `NULL` for a dialed
   connection. It keeps working after the connection is closed.
+
+- `is_reading`:
+
+  `TRUE` while a read loop started by `$read_loop()` is running, `FALSE`
+  otherwise, including once the connection is closed.
 
 - `is_closed`:
 
@@ -160,7 +158,7 @@ interleave with it, so only write.
 
 - [`TailcatConnection$close_write_async()`](#method-TailcatConnection-close_write_async)
 
-- [`TailcatConnection$readable()`](#method-TailcatConnection-readable)
+- [`TailcatConnection$is_readable()`](#method-TailcatConnection-is_readable)
 
 - [`TailcatConnection$info()`](#method-TailcatConnection-info)
 
@@ -445,8 +443,7 @@ Send `data` as one message (TCP only), for the peer to read with
 
 #### Returns
 
-The number of bytes in the message, not counting its length prefix,
-invisibly.
+The connection, invisibly.
 
 ------------------------------------------------------------------------
 
@@ -470,7 +467,7 @@ Asynchronous version of `$write_message()`.
 
 #### Returns
 
-A promise resolving with the number of bytes in the message.
+A promise resolving with the connection.
 
 ------------------------------------------------------------------------
 
@@ -637,8 +634,9 @@ The connection, invisibly.
 
 ### `TailcatConnection$write()`
 
-Write all of `data`. On timeout or error the condition's `bytes` field
-gives the number of bytes already sent.
+Write all of `data`: the call returns once everything has been sent, or
+raises. On timeout or error the condition's `bytes` field gives the
+number of bytes already sent.
 
 #### Usage
 
@@ -658,8 +656,8 @@ gives the number of bytes already sent.
 
 #### Returns
 
-The number of bytes written (an integer, or a double beyond the integer
-range), invisibly.
+The connection, invisibly, so that calls chain
+(`conn$write(data)$close_write()`).
 
 ------------------------------------------------------------------------
 
@@ -683,7 +681,7 @@ Asynchronous version of `$write()`.
 
 #### Returns
 
-A promise resolving with the number of bytes written.
+A promise resolving with the connection.
 
 ------------------------------------------------------------------------
 
@@ -729,7 +727,7 @@ A promise resolving with the connection.
 
 ------------------------------------------------------------------------
 
-### `TailcatConnection$readable()`
+### `TailcatConnection$is_readable()`
 
 Check without waiting whether a TCP read would return immediately
 (buffered data, end of stream, or a pending error). Intended for
@@ -737,7 +735,7 @@ checking idle connections, not as a readiness loop.
 
 #### Usage
 
-    TailcatConnection$readable()
+    TailcatConnection$is_readable()
 
 #### Returns
 
@@ -747,9 +745,7 @@ checking idle connections, not as a readiness loop.
 
 ### `TailcatConnection$info()`
 
-Information about the connection. Because of an upstream tailcat bug it
-fails with `tailcat_failure` once both directions of a TCP connection
-have been shut down.
+Information about the connection.
 
 #### Usage
 
@@ -844,8 +840,7 @@ Print the summary from `$format()`.
 ``` r
 if (FALSE) { # \dontrun{
 conn = TailcatClient$new(address)$dial(8080)
-conn$write("ping")
-conn$close_write()
+conn$write("ping")$close_write()
 conn$read_all(timeout = 10, as = "text")
 } # }
 ```

@@ -64,12 +64,31 @@ Initial version, embedding tailcat’s Go library through its C ABI
   means to show it.
 - `$close(drain = )` on servers and clients waits for TCP shutdown
   traffic before closing.
+- Methods and functions that change an object return it invisibly, so
+  calls chain: `conn$write(data)$close_write()$read_all()`. This
+  includes `$write()` and `$write_message()`, which return the
+  connection rather than a byte count (their `_async()` twins resolve
+  with it), and
+  [`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md)
+  and
+  [`tailcat_address_write()`](https://rundel.github.io/rtailcat/reference/tailcat_address_write.md),
+  which return their first argument.
+- `TailcatListener$is_serving` and `TailcatConnection$is_reading` tell
+  whether a `$serve()` or `$read_loop()` loop is running, and
+  `TailcatConnection$is_readable()` whether a TCP read would return at
+  once.
+- `allowed_clients` and `$allow_client()` take `tailcat_keys` objects as
+  well as public key strings.
+- Subsetting a `tailcat_secret` with `[` or `[[`, and combining with
+  [`c()`](https://rdrr.io/r/base/c.html), keep it a secret.
+  [`tailcat_build_info()`](https://rundel.github.io/rtailcat/reference/tailcat_build_info.md)
+  prints as a short summary.
 - [`tailcat_wait()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)
   and
   [`tailcat_run()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)
   run the later event loop from a script, until a promise settles or a
   condition holds.
-- The options `rtailcat.region` and `rtailcat.derp_map_url` set the
+- The options `rtailcat.region` and `rtailcat.relay_map_url` set the
   relay for servers and clients created without those arguments.
 - [`tailcat_udp_max_payload()`](https://rundel.github.io/rtailcat/reference/tailcat_udp_max_payload.md)
   gives the largest UDP datagram (1232 bytes).
@@ -80,7 +99,12 @@ Initial version, embedding tailcat’s Go library through its C ABI
   connection already waiting) rather than an already expired deadline.
 - `TailcatClient$ping()` returns seconds rather than milliseconds, like
   `$disco_ping()` and the timeouts.
+- `TailcatClient$disco_ping()` reports a ping that went through a relay
+  as `direct = FALSE` with `endpoint = NA`, rather than as an empty
+  `endpoint`.
 - Field names in the results of `$info()`, `$disco_ping()`, and
   [`tailcat_address_parse()`](https://rundel.github.io/rtailcat/reference/tailcat_address_parse.md)
   are snake_case (`relay_port`, `relay_region_id`, and so on) instead of
-  tailcat’s JSON names; `tailcat_build_info()$raw` keeps Go’s own names.
+  tailcat’s JSON names, and the relay map argument and option are
+  `relay_map_url` and `rtailcat.relay_map_url` rather than
+  `derp_map_url`; `tailcat_build_info()$raw` keeps Go’s own names.

@@ -127,7 +127,7 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">wormhole_send</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">timeout</span> <span class="op">=</span> <span class="fl">600</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Sends an R object to one receiver and waits until it confirms</span></span>
+<span>  <span class="co"># Sends an R object to one receiver, waits until it confirms, and returns the object</span></span>
 <span></span>
 <span>  <span class="va">srv</span> <span class="op">=</span> <span class="va"><a href="../reference/TailcatServer.html">TailcatServer</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="va">srv</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
@@ -148,10 +148,11 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="co"># ends the stream or resets it, so a failure also counts as no confirmation</span></span>
 <span>  <span class="va">payload</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/serialize.html" class="external-link">serialize</a></span><span class="op">(</span><span class="va">x</span>, <span class="cn">NULL</span><span class="op">)</span></span>
 <span>  <span class="va">reply</span> <span class="op">=</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
-<span>    <span class="op">{</span></span>
-<span>      <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">payload</span>, timeout <span class="op">=</span> <span class="va">timeout</span><span class="op">)</span></span>
-<span>      <span class="va">conn</span><span class="op">$</span><span class="fu">read_message</span><span class="op">(</span>timeout <span class="op">=</span> <span class="va">timeout</span>, as <span class="op">=</span> <span class="st">"text"</span>, max_bytes <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span>
-<span>    <span class="op">}</span>,</span>
+<span>    <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">payload</span>, timeout <span class="op">=</span> <span class="va">timeout</span><span class="op">)</span><span class="op">$</span><span class="fu">read_message</span><span class="op">(</span></span>
+<span>      timeout <span class="op">=</span> <span class="va">timeout</span>,</span>
+<span>      as <span class="op">=</span> <span class="st">"text"</span>,</span>
+<span>      max_bytes <span class="op">=</span> <span class="fl">16</span></span>
+<span>    <span class="op">)</span>,</span>
 <span>    tailcat_failure <span class="op">=</span> \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
 <span>  <span class="op">)</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">reply</span>, <span class="st">"ok"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -160,7 +161,7 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="va">srv</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span>  <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_inform</a></span><span class="op">(</span><span class="st">"Sent {format_bytes(length(payload))}."</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
 <p>The address is a <code>tailcat_secret</code>, which prints as <code>&lt;redacted&gt;</code>, so <code>wormhole_send()</code> calls <code><a href="../reference/tailcat_reveal.html">tailcat_reveal()</a></code> to show it deliberately. This is the one place the secret is meant to appear.</p>
@@ -197,8 +198,7 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="va">value</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/serialize.html" class="external-link">unserialize</a></span><span class="op">(</span><span class="va">payload</span><span class="op">)</span></span>
 <span>  <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_inform</a></span><span class="op">(</span><span class="st">"Received {format_bytes(length(payload))}."</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="st">"ok"</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span>
-<span>  <span class="va">conn</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="st">"ok"</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="va">value</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
@@ -240,17 +240,17 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <div class="cell">
 <div class="sourceCode cell-code" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">progress_record</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">monitor</span>, <span class="va">datagram</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Stores one report, ignoring datagrams that are not JSON objects</span></span>
+<span>  <span class="co"># Stores one report, ignoring datagrams that are not JSON objects naming their job</span></span>
 <span></span>
 <span>  <span class="va">event</span> <span class="op">=</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
 <span>    <span class="va">datagram</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/rawConversion.html" class="external-link">rawToChar</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">fromJSON</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>    error <span class="op">=</span> \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
 <span>  <span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">is.list</a></span><span class="op">(</span><span class="va">event</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">event</span><span class="op">$</span><span class="va">received</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">is.list</a></span><span class="op">(</span><span class="va">event</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">is.character</a></span><span class="op">(</span><span class="va">event</span><span class="op">$</span><span class="va">job</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">event</span><span class="op">$</span><span class="va">job</span><span class="op">)</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="va">monitor</span><span class="op">$</span><span class="va">events</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">monitor</span><span class="op">$</span><span class="va">events</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span> <span class="va">event</span></span>
+<span>    <span class="va">monitor</span><span class="op">$</span><span class="va">last_seen</span><span class="op">[[</span><span class="va">event</span><span class="op">$</span><span class="va">job</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="op">}</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">monitor</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">progress_monitor</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">port</span> <span class="op">=</span> <span class="fl">9000L</span><span class="op">)</span> <span class="op">{</span></span>
@@ -260,7 +260,9 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="va">lst</span> <span class="op">=</span> <span class="va">srv</span><span class="op">$</span><span class="fu">listen</span><span class="op">(</span><span class="va">port</span>, network <span class="op">=</span> <span class="st">"udp"</span><span class="op">)</span></span>
 <span>  <span class="va">monitor</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/environment.html" class="external-link">new.env</a></span><span class="op">(</span>parent <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/environment.html" class="external-link">emptyenv</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="va">monitor</span><span class="op">$</span><span class="va">server</span> <span class="op">=</span> <span class="va">srv</span></span>
+<span>  <span class="va">monitor</span><span class="op">$</span><span class="va">listener</span> <span class="op">=</span> <span class="va">lst</span></span>
 <span>  <span class="va">monitor</span><span class="op">$</span><span class="va">events</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="va">monitor</span><span class="op">$</span><span class="va">last_seen</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="co"># A failed flow is closed anyway and there is no one to tell, so its error is</span></span>
 <span>  <span class="co"># dropped instead of becoming a warning</span></span>
@@ -279,45 +281,45 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">progress_data</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">monitor</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Returns the reports as a data frame with one row per report, ordered by job and sequence number</span></span>
+<span>  <span class="co"># Returns the reports as a tibble with one row per report, ordered by job and sequence number</span></span>
 <span></span>
 <span>  <span class="va">events</span> <span class="op">=</span> <span class="va">monitor</span><span class="op">$</span><span class="va">events</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">events</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span>job <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>, seq <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="op">}</span></span>
 <span></span>
 <span>  <span class="co"># Reports may carry different fields</span></span>
 <span>  <span class="va">cols</span> <span class="op">=</span> <span class="va">events</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">names</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="va">rows</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">events</span>, \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="va">e</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">setdiff</a></span><span class="op">(</span><span class="va">cols</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span><span class="op">]</span> <span class="op">=</span> <span class="cn">NA</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">e</span><span class="op">[</span><span class="va">cols</span><span class="op">]</span><span class="op">)</span></span>
+<span>    <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/as_tibble.html" class="external-link">as_tibble</a></span><span class="op">(</span><span class="va">e</span><span class="op">[</span><span class="va">cols</span><span class="op">]</span><span class="op">)</span></span>
 <span>  <span class="op">}</span><span class="op">)</span></span>
 <span>  <span class="va">out</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">rows</span><span class="op">)</span></span>
-<span>  <span class="va">out</span> <span class="op">=</span> <span class="va">out</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">out</span><span class="op">$</span><span class="va">job</span>, <span class="va">out</span><span class="op">$</span><span class="va">seq</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">out</span><span class="op">)</span> <span class="op">=</span> <span class="cn">NULL</span></span>
-<span>  <span class="va">out</span></span>
+<span>  <span class="va">out</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">out</span><span class="op">$</span><span class="va">job</span>, <span class="va">out</span><span class="op">$</span><span class="va">seq</span><span class="op">)</span>, <span class="op">]</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">progress_stop</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">monitor</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Stops collecting reports and closes the monitor's server</span></span>
+<span>  <span class="co"># Stops collecting reports, closes the monitor's server, and returns the monitor</span></span>
 <span></span>
 <span>  <span class="va">monitor</span><span class="op">$</span><span class="va">server</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">monitor</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">print.progress_monitor</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">...</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Shows how many reports have arrived from how many jobs</span></span>
+<span>  <span class="co"># Shows how many reports have arrived from how many jobs, and whether more can arrive</span></span>
 <span></span>
 <span>  <span class="va">n</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">$</span><span class="va">events</span><span class="op">)</span></span>
-<span>  <span class="va">jobs</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">x</span><span class="op">$</span><span class="va">events</span>, \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="va">e</span><span class="op">$</span><span class="va">job</span>, <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="op">)</span></span>
-<span>  <span class="st">"&lt;progress monitor&gt; {n} report{?s} from {jobs} job{?s}"</span> <span class="op">|&gt;</span></span>
+<span>  <span class="va">jobs</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">$</span><span class="va">last_seen</span><span class="op">)</span></span>
+<span>  <span class="va">state</span> <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="va">x</span><span class="op">$</span><span class="va">listener</span><span class="op">$</span><span class="va">is_serving</span><span class="op">)</span> <span class="st">"collecting"</span> <span class="kw">else</span> <span class="st">"stopped"</span></span>
+<span>  <span class="st">"&lt;progress monitor&gt; {n} report{?s} from {jobs} job{?s} ({state})"</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/pluralize.html" class="external-link">pluralize</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"\n"</span>, sep <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
-<p>A report that is malformed, for example one sent by something other than <code>progress_report()</code>, is ignored. Since a monitor accepts reports from anyone who has its address, it does nothing with them other than store them. If reading from a flow fails, the read loop closes it; the <code>on_error</code> callback that does nothing keeps that from showing up as a warning.</p>
-<p>The job side dials the monitor once and then sends one datagram per report. Each report carries the job name and a sequence number, so the monitor can tell jobs apart and notice lost reports. <code>progress_report()</code> never signals an error: if the monitor is unreachable the report is simply lost, and a write that cannot complete within a second is abandoned.</p>
+<p>A report that is malformed, for example one sent by something other than <code>progress_report()</code>, is ignored. Since a monitor accepts reports from anyone who has its address, it does nothing with them other than store them. The monitor also notes when it last heard from each job, which it keeps to itself rather than adding to the reports: <code>progress_data()</code> returns what the jobs said. The print method uses the listener’s <code>$is_serving</code> to say whether the monitor is still collecting. If reading from a flow fails, the read loop closes it; the <code>on_error</code> callback that does nothing keeps that from showing up as a warning.</p>
+<p>The job side dials the monitor once and then sends one datagram per report. Each report carries the job name and a sequence number, so the monitor can tell jobs apart and notice lost reports. <code>progress_report()</code> never stops the job because of the network: if the monitor is unreachable the report is simply lost, and a write that cannot complete within a second is abandoned. It returns the reporter, which counts such reports in <code>reporter$unsent</code>, rather than a <code>TRUE</code> or <code>FALSE</code> that a job would have to check after every call.</p>
+<p>The fields of a report are whatever the job names in <code>...</code>, so the reporter argument is called <code>.reporter</code>: without the dot, a field called <code>reporter</code>, or just <code>rep</code>, would be taken for the argument instead of being sent. For the same reason the two names every report already carries, <code>job</code> and <code>seq</code>, are refused.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">progress_reporter</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">address</span>, <span class="va">job</span>, <span class="va">port</span> <span class="op">=</span> <span class="fl">9000L</span><span class="op">)</span> <span class="op">{</span></span>
@@ -329,48 +331,49 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="va">reporter</span><span class="op">$</span><span class="va">conn</span> <span class="op">=</span> <span class="va">cl</span><span class="op">$</span><span class="fu">dial</span><span class="op">(</span><span class="va">port</span>, network <span class="op">=</span> <span class="st">"udp"</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span>
 <span>  <span class="va">reporter</span><span class="op">$</span><span class="va">job</span> <span class="op">=</span> <span class="va">job</span></span>
 <span>  <span class="va">reporter</span><span class="op">$</span><span class="va">seq</span> <span class="op">=</span> <span class="fl">0L</span></span>
+<span>  <span class="va">reporter</span><span class="op">$</span><span class="va">unsent</span> <span class="op">=</span> <span class="fl">0L</span></span>
 <span>  <span class="va">reporter</span></span>
 <span><span class="op">}</span></span>
 <span></span>
-<span><span class="va">progress_report</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">reporter</span>, <span class="va">...</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Sends one report with the fields in `...` and returns whether it was sent</span></span>
+<span><span class="va">progress_report</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">.reporter</span>, <span class="va">...</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># Sends one report with the fields in `...` and returns the reporter</span></span>
 <span></span>
-<span>  <span class="va">reporter</span><span class="op">$</span><span class="va">seq</span> <span class="op">=</span> <span class="va">reporter</span><span class="op">$</span><span class="va">seq</span> <span class="op">+</span> <span class="fl">1L</span></span>
-<span>  <span class="va">event</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    job <span class="op">=</span> <span class="va">reporter</span><span class="op">$</span><span class="va">job</span>,</span>
-<span>    seq <span class="op">=</span> <span class="va">reporter</span><span class="op">$</span><span class="va">seq</span>,</span>
-<span>    sent <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    <span class="va">...</span></span>
-<span>  <span class="op">)</span></span>
-<span>  <span class="va">payload</span> <span class="op">=</span> <span class="va">event</span> <span class="op">|&gt;</span></span>
+<span>  <span class="va">fields</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span>
+<span>  <span class="va">reserved</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">intersect</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fields</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"job"</span>, <span class="st">"seq"</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">reserved</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_abort</a></span><span class="op">(</span><span class="st">"A report cannot have {cli::qty(reserved)}field{?s} named {.field {reserved}}."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">seq</span> <span class="op">=</span> <span class="va">.reporter</span><span class="op">$</span><span class="va">seq</span> <span class="op">+</span> <span class="fl">1L</span></span>
+<span>  <span class="va">.reporter</span><span class="op">$</span><span class="va">seq</span> <span class="op">=</span> <span class="va">seq</span></span>
+<span>  <span class="va">payload</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>job <span class="op">=</span> <span class="va">.reporter</span><span class="op">$</span><span class="va">job</span>, seq <span class="op">=</span> <span class="va">seq</span><span class="op">)</span>, <span class="va">fields</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">toJSON</a></span><span class="op">(</span>auto_unbox <span class="op">=</span> <span class="cn">TRUE</span>, digits <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/base/rawConversion.html" class="external-link">charToRaw</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="va">limit</span> <span class="op">=</span> <span class="fu"><a href="../reference/tailcat_udp_max_payload.html">tailcat_udp_max_payload</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">payload</span><span class="op">)</span> <span class="op">&gt;</span> <span class="va">limit</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_warn</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>      <span class="st">"Report {reporter$seq} was not sent."</span>,</span>
+<span>      <span class="st">"Report {seq} was not sent."</span>,</span>
 <span>      <span class="st">"i"</span> <span class="op">=</span> <span class="st">"It is {length(payload)} bytes; a datagram holds at most {limit}."</span></span>
 <span>    <span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="va">.reporter</span><span class="op">$</span><span class="va">unsent</span> <span class="op">=</span> <span class="va">.reporter</span><span class="op">$</span><span class="va">unsent</span> <span class="op">+</span> <span class="fl">1L</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">.reporter</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="op">}</span></span>
 <span></span>
 <span>  <span class="co"># Monitoring must never slow down or stop the job, so a failed send is</span></span>
-<span>  <span class="co"># given up after a second and otherwise ignored</span></span>
-<span>  <span class="va">sent</span> <span class="op">=</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
-<span>    <span class="op">{</span></span>
-<span>      <span class="va">reporter</span><span class="op">$</span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="va">payload</span>, timeout <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span>      <span class="cn">TRUE</span></span>
-<span>    <span class="op">}</span>,</span>
-<span>    error <span class="op">=</span> \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">FALSE</span></span>
+<span>  <span class="co"># given up after a second and only counted</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>    <span class="va">.reporter</span><span class="op">$</span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="va">payload</span>, timeout <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span>
+<span>    error <span class="op">=</span> \<span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">.reporter</span><span class="op">$</span><span class="va">unsent</span> <span class="op">=</span> <span class="va">.reporter</span><span class="op">$</span><span class="va">unsent</span> <span class="op">+</span> <span class="fl">1L</span></span>
+<span>    <span class="op">}</span></span>
 <span>  <span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">sent</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">.reporter</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">progress_done</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">reporter</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Disconnects the reporter from the monitor</span></span>
+<span>  <span class="co"># Disconnects the reporter from the monitor and returns the reporter</span></span>
 <span></span>
 <span>  <span class="va">reporter</span><span class="op">$</span><span class="va">client</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">reporter</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
 <p>Finally, a small Shiny app plots one metric against another, with a line per job, and lists each job’s latest report. It checks for new reports once a second. Shiny runs the later event loop, so the monitor keeps collecting reports while the app is open.</p>
@@ -412,9 +415,9 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>    <span class="va">output</span><span class="op">$</span><span class="va">latest</span> <span class="op">=</span> <span class="fu">shiny</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/shiny/man/renderTable.html" class="external-link">renderTable</a></span><span class="op">(</span><span class="op">{</span></span>
 <span>      <span class="va">d</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>      <span class="fu">shiny</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/shiny/man/req.html" class="external-link">req</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span></span>
-<span>      <span class="va">last</span> <span class="op">=</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">job</span>, fromLast <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span>      <span class="va">latest</span> <span class="op">=</span> <span class="va">d</span><span class="op">[</span><span class="va">last</span>, <span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">setdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sent"</span>, <span class="st">"received"</span><span class="op">)</span><span class="op">)</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>      <span class="va">latest</span><span class="op">$</span><span class="va">age</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/difftime.html" class="external-link">difftime</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span>, <span class="va">d</span><span class="op">$</span><span class="va">received</span><span class="op">[</span><span class="va">last</span><span class="op">]</span>, units <span class="op">=</span> <span class="st">"secs"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>      <span class="va">latest</span> <span class="op">=</span> <span class="va">d</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">job</span>, fromLast <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="op">]</span></span>
+<span>      <span class="va">seen</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">c</span>, <span class="va">monitor</span><span class="op">$</span><span class="va">last_seen</span><span class="op">[</span><span class="va">latest</span><span class="op">$</span><span class="va">job</span><span class="op">]</span><span class="op">)</span></span>
+<span>      <span class="va">latest</span><span class="op">$</span><span class="va">age</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/difftime.html" class="external-link">difftime</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span>, <span class="va">seen</span>, units <span class="op">=</span> <span class="st">"secs"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>        <span class="fu"><a href="https://rdrr.io/r/base/double.html" class="external-link">as.double</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>        <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>        <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"s"</span><span class="op">)</span></span>
@@ -451,13 +454,32 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <div class="cell">
 <div class="sourceCode cell-code" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">m</span></span>
-<span><span class="co">#&gt; &lt;progress monitor&gt; 20 reports from 1 job</span></span>
+<span><span class="co">#&gt; &lt;progress monitor&gt; 20 reports from 1 job (collecting)</span></span>
 <span><span class="va">d</span> <span class="op">=</span> <span class="fu">progress_data</span><span class="op">(</span><span class="va">m</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">tail</a></span><span class="op">(</span><span class="va">d</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"job"</span>, <span class="st">"seq"</span>, <span class="st">"iter"</span>, <span class="st">"loss"</span><span class="op">)</span><span class="op">]</span>, <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="co">#&gt;      job seq iter       loss</span></span>
-<span><span class="co">#&gt; 18 fit-1  18   18 0.01801440</span></span>
-<span><span class="co">#&gt; 19 fit-1  19   19 0.01441152</span></span>
-<span><span class="co">#&gt; 20 fit-1  20   20 0.01152922</span></span>
+<span><span class="va">d</span></span>
+<span><span class="co">#&gt; # A tibble: 20 × 4</span></span>
+<span><span class="co">#&gt;    job     seq  iter   loss</span></span>
+<span><span class="co">#&gt;    &lt;chr&gt; &lt;int&gt; &lt;int&gt;  &lt;dbl&gt;</span></span>
+<span><span class="co">#&gt;  1 fit-1     1     1 0.8</span></span>
+<span><span class="co">#&gt;  2 fit-1     2     2 0.64</span></span>
+<span><span class="co">#&gt;  3 fit-1     3     3 0.512</span></span>
+<span><span class="co">#&gt;  4 fit-1     4     4 0.410</span></span>
+<span><span class="co">#&gt;  5 fit-1     5     5 0.328</span></span>
+<span><span class="co">#&gt;  6 fit-1     6     6 0.262</span></span>
+<span><span class="co">#&gt;  7 fit-1     7     7 0.210</span></span>
+<span><span class="co">#&gt;  8 fit-1     8     8 0.168</span></span>
+<span><span class="co">#&gt;  9 fit-1     9     9 0.134</span></span>
+<span><span class="co">#&gt; 10 fit-1    10    10 0.107</span></span>
+<span><span class="co">#&gt; 11 fit-1    11    11 0.0859</span></span>
+<span><span class="co">#&gt; 12 fit-1    12    12 0.0687</span></span>
+<span><span class="co">#&gt; 13 fit-1    13    13 0.0550</span></span>
+<span><span class="co">#&gt; 14 fit-1    14    14 0.0440</span></span>
+<span><span class="co">#&gt; 15 fit-1    15    15 0.0352</span></span>
+<span><span class="co">#&gt; 16 fit-1    16    16 0.0281</span></span>
+<span><span class="co">#&gt; 17 fit-1    17    17 0.0225</span></span>
+<span><span class="co">#&gt; 18 fit-1    18    18 0.0180</span></span>
+<span><span class="co">#&gt; 19 fit-1    19    19 0.0144</span></span>
+<span><span class="co">#&gt; 20 fit-1    20    20 0.0115</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/sets.html" class="external-link">setdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">seq</span><span class="op">)</span><span class="op">)</span>, <span class="va">d</span><span class="op">$</span><span class="va">seq</span><span class="op">)</span></span>
 <span><span class="co">#&gt; integer(0)</span></span></code></pre></div>
 </div>
@@ -484,10 +506,8 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="co"># Sends one request or response: a JSON head, then the body as its own message</span></span>
 <span></span>
 <span>  <span class="va">head</span><span class="op">$</span><span class="va">headers</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I</a></span><span class="op">(</span><span class="va">head</span><span class="op">$</span><span class="va">headers</span><span class="op">)</span></span>
-<span>  <span class="va">head</span> <span class="op">|&gt;</span></span>
-<span>    <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">toJSON</a></span><span class="op">(</span>auto_unbox <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>    <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span>timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span>
-<span>  <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">body</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span>
+<span>  <span class="va">head</span> <span class="op">=</span> <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">toJSON</a></span><span class="op">(</span><span class="va">head</span>, auto_unbox <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">conn</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">head</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span><span class="op">$</span><span class="fu">write_message</span><span class="op">(</span><span class="va">body</span>, timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">proxy_receive</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">conn</span>, <span class="va">max_bytes</span><span class="op">)</span> <span class="op">{</span></span>
@@ -587,9 +607,34 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>    <span class="st">"Sharing the app on port {app_port}. Address for the other machine:"</span>,</span>
 <span>    <span class="st">"{address}"</span></span>
 <span>  <span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">srv</span><span class="op">)</span></span>
+<span>  <span class="fu">new_proxy</span><span class="op">(</span><span class="va">srv</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"sharing the app on port"</span>, <span class="va">app_port</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">new_proxy</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">node</span>, <span class="va">what</span>, <span class="va">http</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># One end of a proxy: its tailcat server or client, and on the opening side the local web server</span></span>
+<span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/structure.html" class="external-link">structure</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>node <span class="op">=</span> <span class="va">node</span>, what <span class="op">=</span> <span class="va">what</span>, http <span class="op">=</span> <span class="va">http</span><span class="op">)</span>, class <span class="op">=</span> <span class="st">"proxy"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">print.proxy</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">...</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># Shows what the proxy does, and whether it has been closed</span></span>
+<span></span>
+<span>  <span class="va">state</span> <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="va">x</span><span class="op">$</span><span class="va">node</span><span class="op">$</span><span class="va">is_closed</span><span class="op">)</span> <span class="st">" (closed)"</span> <span class="kw">else</span> <span class="st">""</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"&lt;proxy&gt; "</span>, <span class="va">x</span><span class="op">$</span><span class="va">what</span>, <span class="va">state</span>, <span class="st">"\n"</span>, sep <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">proxy_close</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">proxy</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># Stops either end of a proxy and returns it</span></span>
+<span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">proxy</span><span class="op">$</span><span class="va">http</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu">httpuv</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/httpuv/reference/stopServer.html" class="external-link">stopServer</a></span><span class="op">(</span><span class="va">proxy</span><span class="op">$</span><span class="va">http</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">proxy</span><span class="op">$</span><span class="va">node</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">proxy</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
+<p>Both ends of a proxy are the same kind of object, so one <code>proxy_close()</code> stops either, and printing one says what it is doing.</p>
 <p>Anyone with the address can use the app through it, so share the address only with people who may use the app. The proxy only ever connects to the one port it was given on <code>127.0.0.1</code>, and it checks the path because a path that does not start with <code>/</code> would turn the URL into one for another host.</p>
 <p>On your machine, <code>proxy_open()</code> starts a small httpuv server on <code>127.0.0.1</code> whose only job is to pass each request on: it dials the other side, sends the request, and hands the response back to httpuv. If anything fails on the way, the browser gets a 502 response that says why.</p>
 <div class="cell">
@@ -627,17 +672,9 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>  <span class="co"># Serves the app shared at `address` on http://127.0.0.1:`port` of this machine</span></span>
 <span></span>
 <span>  <span class="va">cl</span> <span class="op">=</span> <span class="va"><a href="../reference/TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span><span class="op">)</span></span>
-<span>  <span class="va">server</span> <span class="op">=</span> <span class="fu">httpuv</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/httpuv/reference/startServer.html" class="external-link">startServer</a></span><span class="op">(</span><span class="st">"127.0.0.1"</span>, <span class="va">port</span>, <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>call <span class="op">=</span> \<span class="op">(</span><span class="va">req</span><span class="op">)</span> <span class="fu">proxy_fetch</span><span class="op">(</span><span class="va">cl</span>, <span class="va">req</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">http</span> <span class="op">=</span> <span class="fu">httpuv</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/httpuv/reference/startServer.html" class="external-link">startServer</a></span><span class="op">(</span><span class="st">"127.0.0.1"</span>, <span class="va">port</span>, <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>call <span class="op">=</span> \<span class="op">(</span><span class="va">req</span><span class="op">)</span> <span class="fu">proxy_fetch</span><span class="op">(</span><span class="va">cl</span>, <span class="va">req</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="fu">cli</span><span class="fu">::</span><span class="fu"><a href="https://cli.r-lib.org/reference/cli_abort.html" class="external-link">cli_inform</a></span><span class="op">(</span><span class="st">"Open {.url http://127.0.0.1:{port}} to use the app on the other machine."</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/structure.html" class="external-link">structure</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>client <span class="op">=</span> <span class="va">cl</span>, server <span class="op">=</span> <span class="va">server</span><span class="op">)</span>, class <span class="op">=</span> <span class="st">"proxy"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="va">proxy_close</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">proxy</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># Stops the local server and disconnects from the other machine</span></span>
-<span></span>
-<span>  <span class="fu">httpuv</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/httpuv/reference/stopServer.html" class="external-link">stopServer</a></span><span class="op">(</span><span class="va">proxy</span><span class="op">$</span><span class="va">server</span><span class="op">)</span></span>
-<span>  <span class="va">proxy</span><span class="op">$</span><span class="va">client</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu">new_proxy</span><span class="op">(</span><span class="va">cl</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"serving http://127.0.0.1:"</span>, <span class="va">port</span><span class="op">)</span>, <span class="va">http</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
 <p>The functions handle one request at a time on each side, which is plenty for one person using an app; an app that keeps many requests in flight would call for the <code>_async()</code> methods and returning promises to httpuv. Only plain HTTP is forwarded. WebSockets, which Shiny apps use, need the connection to stay open in both directions, which would mean forwarding raw bytes instead of requests.</p>
@@ -656,9 +693,11 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 <span>    <span class="op">)</span></span>
 <span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="va">srv</span> <span class="op">=</span> <span class="fu">proxy_share</span><span class="op">(</span><span class="fl">8000</span><span class="op">)</span></span>
+<span><span class="va">shared</span> <span class="op">=</span> <span class="fu">proxy_share</span><span class="op">(</span><span class="fl">8000</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Sharing the app on port 8000. Address for the other machine:</span></span>
-<span><span class="co">#&gt; tcAbC...xYz</span></span></code></pre></div>
+<span><span class="co">#&gt; tcAbC...xYz</span></span>
+<span><span class="va">shared</span></span>
+<span><span class="co">#&gt; &lt;proxy&gt; sharing the app on port 8000</span></span></code></pre></div>
 </div>
 <p>On your machine, open the proxy with that address. Then point a browser at the URL it prints.</p>
 <div class="cell">
@@ -682,9 +721,8 @@ pre.browser { --side-color: #d95f02; --side-label: "On your machine"; }
 </div>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb22"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">srv</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">app</span><span class="op">$</span><span class="fu">kill</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">proxy_close</span><span class="op">(</span><span class="va">shared</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="va">app</span><span class="op">$</span><span class="fu">kill</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 </section></section><script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {

@@ -65,7 +65,7 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p><code>tailcat_address_write()</code> returns <code>path</code>, invisibly. <code>tailcat_address_read()</code> returns the address as a <a href="tailcat_secret.html">tailcat_secret</a>, after checking that it parses as a tailcat address.</p>
+    <p><code>tailcat_address_write()</code> returns <code>address</code> as it was given (the server, or the address), invisibly. <code>tailcat_address_read()</code> returns the address as a <a href="tailcat_secret.html">tailcat_secret</a>, after checking that it parses as a tailcat address.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -84,7 +84,7 @@
 <span class="r-in"><span><span class="fu">tailcat_address_write</span><span class="op">(</span><span class="va">srv</span>, <span class="st">"~/.config/myjob/address"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># In the job:</span></span></span>
-<span class="r-in"><span><span class="va">cli</span> <span class="op">=</span> <span class="va"><a href="TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="fu">tailcat_address_read</span><span class="op">(</span><span class="st">"~/.config/myjob/address"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cl</span> <span class="op">=</span> <span class="va"><a href="TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="fu">tailcat_address_read</span><span class="op">(</span><span class="st">"~/.config/myjob/address"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

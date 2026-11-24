@@ -42,9 +42,9 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">tailcat_address_resolve</span><span class="op">(</span><span class="va">address</span>, derp_map_url <span class="op">=</span> <span class="cn">NULL</span>, timeout <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">tailcat_address_resolve</span><span class="op">(</span><span class="va">address</span>, relay_map_url <span class="op">=</span> <span class="cn">NULL</span>, timeout <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">tailcat_address_resolve_async</span><span class="op">(</span><span class="va">address</span>, derp_map_url <span class="op">=</span> <span class="cn">NULL</span>, timeout <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">tailcat_address_resolve_async</span><span class="op">(</span><span class="va">address</span>, relay_map_url <span class="op">=</span> <span class="cn">NULL</span>, timeout <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -55,8 +55,8 @@
 <dd><p>A tailcat address, as a string or the <a href="tailcat_secret.html">tailcat_secret</a> returned by <code>TailcatServer$address</code>. Surrounding whitespace is ignored. Addresses are secrets.</p></dd>
 
 
-<dt id="arg-derp-map-url">derp_map_url<a class="anchor" aria-label="anchor" href="#arg-derp-map-url"></a></dt>
-<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
+<dt id="arg-relay-map-url">relay_map_url<a class="anchor" aria-label="anchor" href="#arg-relay-map-url"></a></dt>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.relay_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
 
 
 <dt id="arg-timeout">timeout<a class="anchor" aria-label="anchor" href="#arg-timeout"></a></dt>

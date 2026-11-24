@@ -68,9 +68,7 @@ tailcat_address_write(srv, "address.txt")
 
 conn = lst$accept()
 msg = conn$read_all(as = "text")
-conn$write(paste0("server received: ", msg))
-conn$close_write()
-conn$close()
+conn$write(paste0("server received: ", msg))$close_write()$close()
 
 srv$close(drain = 5)
 ```
@@ -84,8 +82,7 @@ library(rtailcat)
 
 cl = TailcatClient$new(tailcat_address_read("address.txt"))
 conn = cl$dial(8080)
-conn$write("hello from the client")
-conn$close_write()
+conn$write("hello from the client")$close_write()
 conn$read_all(as = "text")
 #> [1] "server received: hello from the client"
 conn$close()
@@ -113,11 +110,13 @@ way, and returns `NULL` once the other side has ended the stream. Give
 message is refused before it is read. `$read_exact(n)` reads exactly `n`
 bytes, for fixed-size fields of other binary protocols.
 
-`$close_write()` tells the other side that you have finished sending (it
-then reads end of stream, so `$read_all()` returns), while still letting
-you read the reply. `$close(drain = 5)` on a client or server first
-waits up to five seconds for TCP shutdown traffic to finish, so the peer
-sees a clean close; close the connections before that.
+`$write()`, like the other methods that change a connection, returns the
+connection, so calls chain as above. `$close_write()` tells the other
+side that you have finished sending (it then reads end of stream, so
+`$read_all()` returns), while still letting you read the reply.
+`$close(drain = 5)` on a client or server first waits up to five seconds
+for TCP shutdown traffic to finish, so the peer sees a clean close;
+close the connections before that.
 
 Use `network = "udp"` in `$listen()` and `$dial()` for datagrams: each
 `$write()` sends one datagram of at most 1232 bytes
@@ -126,8 +125,8 @@ and each `$read()` returns one. A UDP flow appears at the listener once
 the client has sent its first datagram.
 
 A few helpers round this out: `cl$ping()` and `cl$disco_ping()` measure
-latency to the server in seconds (the latter also reports whether the
-path is direct or through a relay),
+latency to the server in seconds (the latter also reports, as `direct`,
+whether the path is direct or through a relay),
 [`tailcat_address_parse()`](https://rundel.github.io/rtailcat/reference/tailcat_address_parse.md)
 shows the public parts of an address without revealing its pre-shared
 key, and
@@ -135,7 +134,7 @@ key, and
 reports the embedded tailcat and Go versions. To use your own relay for
 every server and client in a session, including ones created inside
 other packages, set the options `rtailcat.region` or
-`rtailcat.derp_map_url` (see
+`rtailcat.relay_map_url` (see
 [`?TailcatServer`](https://rundel.github.io/rtailcat/reference/TailcatServer.md)).
 
 ## Serving connections asynchronously
@@ -153,9 +152,7 @@ srv = TailcatServer$new()
 lst = srv$listen(7)
 lst$serve(function(conn) {
   promises::then(conn$read_all_async(timeout = 60), function(data) {
-    conn$write(data)
-    conn$close_write()
-    conn$close()
+    conn$write(data)$close_write()$close()
   })
 })
 tailcat_address_write(srv, "address.txt")
@@ -175,8 +172,9 @@ in the example above), is passed to `on_error` if you give one
 (`lst$serve(handler, on_error = function(cond, conn) ...)`), otherwise
 it becomes a warning; either way that connection is closed and the loop
 carries on. Closing the listener or the server ends the loop;
-`lst$stop_serving()` ends it but keeps the listener open. Blocking calls
-inside a handler hold up the event loop until they return, so prefer the
+`lst$stop_serving()` ends it but keeps the listener open, and
+`lst$is_serving` tells whether a loop is running. Blocking calls inside
+a handler hold up the event loop until they return, so prefer the
 `_async()` methods there.
 
 `conn$read_loop(callback)` is the reading counterpart of `$serve()`: it
@@ -184,7 +182,8 @@ calls `callback` with each chunk, UDP datagram, or (with
 `messages = TRUE`) message as it arrives, waits for a promise the
 callback returns before reading on, and stops at the end of the stream
 (calling `on_end`), on `conn$stop_reading()`, or on an error (calling
-`on_error` and closing the connection).
+`on_error` and closing the connection). `conn$is_reading` tells whether
+a loop is running.
 
 In a script, `tailcat_wait(promise, timeout)` runs the event loop until
 a promise settles and returns its value, so
@@ -256,28 +255,37 @@ Branch on the class or the status rather than on the message:
 
 ``` r
 
+library(rtailcat)
+
+srv = TailcatServer$new()
+lst = srv$listen(8080)
 tryCatch(
-  lst$accept(timeout = 5),
+  lst$accept(timeout = 2),
   tailcat_timeout = function(e) message("nobody connected")
 )
+#> nobody connected
 ```
 
 The message starts with a one-line summary, followed by tailcat’s own
 description when it has one:
 
-    Error in `lst$accept()`:
-    ! Timed out after 5 seconds trying to accept a connection.
-    ℹ tailcat: context deadline exceeded
+``` r
+
+lst$accept(timeout = 2)
+#> Error in `lst$accept()`:
+#> ! Timed out after 2 seconds trying to accept a connection.
+#> ℹ tailcat: context deadline exceeded
+```
 
 Once a server, client, listener, or connection is closed (or the client
 or server that owns it is), its methods and fields raise
 `tailcat_closed`; only `$close()`, `$format()`, `$print()`, and
-`$is_closed` keep working, as do a listener’s `$server` and a
-connection’s `$client` or `$server`, which give the object that owns it.
-Objects restored from a saved session
-([`saveRDS()`](https://rdrr.io/r/base/readRDS.html), a saved workspace)
-are closed, because the handles inside them do not survive
-serialization.
+`$is_closed` keep working, as do `$is_serving` and `$is_reading` (which
+are then `FALSE`), a listener’s `$server`, and a connection’s `$client`
+or `$server`, which give the object that owns it. Objects restored from
+a saved session ([`saveRDS()`](https://rdrr.io/r/base/readRDS.html), a
+saved workspace) are closed, because the handles inside them do not
+survive serialization.
 
 Blocking calls can be interrupted with Ctrl-C or Esc. If the operation
 completes at the same moment as the interrupt (for example a read whose
@@ -294,7 +302,9 @@ commit it, log it, or paste it into chats or issues. Addresses, private
 keys, and pre-shared keys are returned as `tailcat_secret` strings:
 [`print()`](https://rdrr.io/r/base/print.html),
 [`format()`](https://rdrr.io/r/base/format.html), and
-[`str()`](https://rdrr.io/r/utils/str.html) show `<redacted>`, as do
+[`str()`](https://rdrr.io/r/utils/str.html) show `<redacted>`, also
+after subsetting with `[` or combining with
+[`c()`](https://rdrr.io/r/base/c.html), as do
 [`print()`](https://rdrr.io/r/base/print.html) and
 [`str()`](https://rdrr.io/r/utils/str.html) of lists that contain them
 ([`format()`](https://rdrr.io/r/base/format.html) of a plain list only
@@ -323,8 +333,8 @@ to a file only you can read the first time and loads them from it
 afterwards, and pass them to `TailcatServer$new(key = keys)`, which uses
 both the private key and the pre-shared key. To accept only particular
 clients, give them stable keys
-(`TailcatClient$new(address, key = keys)`) and list their public keys in
-`allowed_clients` or add them with `$allow_client()`.
+(`TailcatClient$new(address, key = keys)`) and pass those keys, or just
+their public keys, in `allowed_clients` or to `$allow_client()`.
 
 ## Caveats
 

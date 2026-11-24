@@ -88,7 +88,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 <h3 id="tailcatclient-new-"><code>TailcatClient$new()</code><a class="anchor" aria-label="anchor" href="#tailcatclient-new-"></a></h3>
 <p>Create a client. No network access happens until it is used.</p><div class="section">
 <h4 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va"><a href="../reference/TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span>, key <span class="op">=</span> <span class="cn">NULL</span>, derp_map_url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va"><a href="../reference/TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span>, key <span class="op">=</span> <span class="cn">NULL</span>, relay_map_url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
 <h4 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>address</code></dt>
@@ -97,8 +97,8 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
       <dt><code>key</code></dt>
 <dd><p>Private node key (a string in text encoding, or a <code>tailcat_keys</code> object from <code><a href="tailcat_keygen.html">tailcat_keygen()</a></code>), or <code>NULL</code> to generate one. A stable key gives the client a stable public key, for use with <code>allowed_clients</code>.</p></dd>
 
-      <dt><code>derp_map_url</code></dt>
-<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
+      <dt><code>relay_map_url</code></dt>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.relay_map_url</code> option (see the section on relay options in <a href="TailcatServer.html">TailcatServer</a>) or, when that is unset, the default.</p></dd>
 
 
 </dl><p></p></div>
@@ -208,7 +208,7 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-4">Returns<a class="anchor" aria-label="anchor" href="#returns-4"></a></h4>
-<p>A list with <code>latency</code> (seconds), <code>endpoint</code> (the direct path, or <code>""</code> when relayed), <code>relay_region_id</code>, and <code>relay_region_code</code> (the relay region the ping went through).</p>
+<p>A list with <code>latency</code> (seconds), <code>direct</code> (<code>TRUE</code> if the ping took a direct path to the server, <code>FALSE</code> if it went through a relay), <code>endpoint</code> (the direct path as <code>"host:port"</code>, or <code>NA</code> when relayed), <code>relay_region_id</code>, and <code>relay_region_code</code> (the relay region the ping went through). tailcat's C ABI reports a relayed ping as an empty <code>endpoint</code>.</p>
 </div>
 
 </div>
@@ -369,12 +369,10 @@ A server with an allowlist (allowed_clients or TailcatServer$allow_client()) doe
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="va">address</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/readLines.html" class="external-link">readLines</a></span><span class="op">(</span><span class="st">"address.txt"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">cli</span> <span class="op">=</span> <span class="va">TailcatClient</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">conn</span> <span class="op">=</span> <span class="va">cli</span><span class="op">$</span><span class="fu">dial</span><span class="op">(</span><span class="fl">8080</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="st">"hello\n"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">cli</span><span class="op">$</span><span class="fu">drain</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">cli</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cl</span> <span class="op">=</span> <span class="va">TailcatClient</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">conn</span> <span class="op">=</span> <span class="va">cl</span><span class="op">$</span><span class="fu">dial</span><span class="op">(</span><span class="fl">8080</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="st">"hello\n"</span><span class="op">)</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cl</span><span class="op">$</span><span class="fu">close</span><span class="op">(</span>drain <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

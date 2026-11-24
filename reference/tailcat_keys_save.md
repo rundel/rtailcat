@@ -34,8 +34,9 @@ tailcat_keys_load(path)
 
 ## Value
 
-`tailcat_keys_save()` returns `path`, invisibly. `tailcat_keys_load()`
-returns a `tailcat_keys` object, as
+`tailcat_keys_save()` returns `keys`, invisibly, so it can end a
+pipeline that creates them. `tailcat_keys_load()` returns a
+`tailcat_keys` object, as
 [`tailcat_keygen()`](https://rundel.github.io/rtailcat/reference/tailcat_keygen.md)
 does.
 

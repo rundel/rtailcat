@@ -115,11 +115,13 @@ Key native-layer rules:
 - Addresses, private keys, and pre-shared keys reach users as
   `tailcat_secret` (`R/secret.R`): a classed character vector whose
   `print`, `format`, `str`, and `toString` methods redact. Validation
-  (`check_string()`) strips the class with `reveal()`. No R field may
-  hold a secret: `TailcatServer$address` calls `tc_info` each time.
-  Before R 4.6.0 [`format()`](https://rdrr.io/r/base/format.html) of a
-  plain list ignores its elements’ classes, so any list this package
-  returns that holds a secret must have its own class with a
+  (`check_string()`) strips the class with `reveal()`. `[`, `[[`, and
+  [`c()`](https://rdrr.io/r/base/c.html) (secret first) methods keep the
+  class, so subsetting and combining stay redacted. No R field may hold
+  a secret: `TailcatServer$address` calls `tc_info` each time. Before R
+  4.6.0 [`format()`](https://rdrr.io/r/base/format.html) of a plain list
+  ignores its elements’ classes, so any list this package returns that
+  holds a secret must have its own class with a
   [`format()`](https://rdrr.io/r/base/format.html) method
   (`tailcat_keys`, and `tailcat_info` for `TailcatServer$info()`).
 - Nothing about a handle is cached in R (owner’s decision). Every
@@ -128,11 +130,14 @@ Key native-layer rules:
   tailcat, or checks `$is_closed`, on each access, so after
   [`close()`](https://rdrr.io/r/base/connections.html) of the object or
   its owner they all raise `tailcat_closed`. Only `$is_closed`,
-  `$close()`, `$format()`, `$print()`, the listener’s `$server`, and the
-  connection’s `$client` and `$server` (one of them `NULL`) keep
-  working. Each class’s `$format()` builds the summary lines and
-  `$print()` only cats them, so the two cannot drift
-  ([`format()`](https://rdrr.io/r/base/format.html) dispatches to
+  `$close()`, `$format()`, `$print()`, the listener’s `$server` and
+  `$is_serving`, and the connection’s `$is_reading`, `$client`, and
+  `$server` (one of them `NULL`) keep working; `$is_serving` and
+  `$is_reading` report R-side loop state and are `FALSE` once closed. A
+  server’s `$public_key`, like `$address`, raises before the server has
+  started (`$is_started` is the test). Each class’s `$format()` builds
+  the summary lines and `$print()` only cats them, so the two cannot
+  drift ([`format()`](https://rdrr.io/r/base/format.html) dispatches to
   `$format()` through R6’s `format.R6`). Format methods must work on
   closed, never-started, and restored objects: they show the state and
   omit what cannot be fetched. A connection’s `$format()` shows its
@@ -307,8 +312,8 @@ R CMD build . && R CMD check --no-manual rtailcat_*.tar.gz
   relay’s log path if the local relay process has exited (instead of
   letting each test wait out its timeout), and, only when no local relay
   is in use, skips if offline. Use `relay_server()` and `relay_client()`
-  (and `relay_derp_map_url()`) in network tests so they follow the relay
-  in use.
+  (and `relay_map_url()`) in network tests so they follow the relay in
+  use.
 - `R CMD check` reports one expected warning: the Go runtime in the
   static archive references `stderr`, `abort`, and `exit`.
 - When testing interrupt handling, note that a shell job started with
@@ -384,10 +389,20 @@ R CMD build . && R CMD check --no-manual rtailcat_*.tar.gz
   order. The examples call `TailcatServer$new()` and
   `TailcatClient$new()` without relay arguments; the side processes and
   `test-examples.R` (including its child processes) set the
-  `rtailcat.region` and `rtailcat.derp_map_url` options to the test
+  `rtailcat.region` and `rtailcat.relay_map_url` options to the test
   relay instead. The rest of the suite does not set the options
-  globally, because tests that pass only `derp_map_url` (such as those
+  globally, because tests that pass only `relay_map_url` (such as those
   using `silent_map_url()`) would then also get the region.
+- `README.md` is generated: `README.qmd` is the source, its usage cells
+  (`hello-*`, `errors-*`, with `class-source` sides like the vignette’s)
+  are rerun by the same `tools/vignette.R`, and `--update` renders
+  `README.md` with `quarto render` (gfm, `wrap: none`, smart quotes
+  off). Never edit `README.md`. A cell option `needs: <file>` copies
+  that file from the other side’s working directory before the cell
+  runs. Tables and the title and badge block are in raw `{=markdown}`
+  blocks so pandoc keeps their padding and layout. Without `--update`
+  the run reports a `README.md` that would change and leaves it as it
+  was.
 - `--update` replaces a cell’s code with what actually ran, so a cell
   whose run stopped early loses its later lines; check the diff before
   committing.
@@ -413,6 +428,38 @@ the owner’s decision there are no R-side workarounds.
   raise `tailcat_failure` (status 5) with `bytes` set to the bytes read,
   which are discarded; the connection stays open and the rest of the
   stream can still be read.
+- Every method and exported function is one of three kinds, and its
+  return value follows from the kind: an editor (changes an object)
+  returns its object invisibly (`self` for a method, the first argument
+  for a function, such as
+  [`tailcat_keys_save()`](https://rundel.github.io/rtailcat/reference/tailcat_keys_save.md)
+  and
+  [`tailcat_address_write()`](https://rundel.github.io/rtailcat/reference/tailcat_address_write.md)),
+  and its `_async()` twin resolves with the object; a constructor
+  returns the new thing (`$listen()`, `$dial()`, `$accept()`,
+  [`tailcat_keygen()`](https://rundel.github.io/rtailcat/reference/tailcat_keygen.md));
+  an accessor or predicate returns the value. `$write()` and
+  `$write_message()` are editors: they return the connection, never a
+  byte count (a write sends everything or raises, with `bytes` on the
+  condition), so calls chain (`conn$write(x)$close_write()`). Do not
+  return a status, count, or logical from an editor; a no-op is silent
+  and a predicate (`$is_serving`, `$is_reading`, `$is_started`,
+  `$is_closed`, `$is_readable()`) lets callers test first.
+  [`tailcat_run()`](https://rundel.github.io/rtailcat/reference/tailcat_wait.md)
+  is the one exception (owner’s decision): it has no object to return
+  and keeps its invisible logical.
+- Predicates are named `is_*`. An argument that takes a public key
+  (`$allow_client()`, `allowed_clients`) also takes a `tailcat_keys`
+  object, through `check_public_key()` and `check_allowed_clients()`.
+- If a function ever takes user-named `...`, the arguments beside it
+  start with a dot (as `progress_report(.reporter, ...)` does in the
+  vignette), so a user’s name cannot be captured or partially matched.
+- User-facing names say “relay”, not “DERP”: `relay_map_url`,
+  `rtailcat.relay_map_url`, `relay_port`, `relay_region_*`. Only the
+  JSON sent to tailcat (`config$derp_map_url`) and the native
+  `rtc_address_resolve()` argument keep upstream’s name. `disco_ping()`
+  reports a relayed ping as `direct = FALSE` and `endpoint = NA`
+  (upstream sends an empty string).
 - Every blocking R6 method `foo()` has a `foo_async()` twin returning a
   promise. Timeouts are in seconds, `Inf` means no deadline, and `0`
   polls.
@@ -434,7 +481,7 @@ the owner’s decision there are no R-side workarounds.
   Readers warn (`tailcat_warning`) when the file is readable by group or
   others. Keys files are JSON with `private_key`, `public_key`,
   `preshared_key`; address files are one line.
-- Relay options `rtailcat.region` (servers) and `rtailcat.derp_map_url`
+- Relay options `rtailcat.region` (servers) and `rtailcat.relay_map_url`
   (servers, clients,
   [`tailcat_address_resolve()`](https://rundel.github.io/rtailcat/reference/tailcat_address_resolve.md))
   are read at creation and used only when the argument is `NULL`; an

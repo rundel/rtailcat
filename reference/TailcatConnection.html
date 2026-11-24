@@ -3,13 +3,11 @@
 For TCP, reads may return fewer bytes than requested and $read() returns NULL at end of stream. For UDP, each read returns one datagram (possibly raw(0)) and each write sends one datagram of at most 1232 bytes (tailcat_udp_max_payload()). $write_message() and $read_message() send and receive delimited messages over TCP (see the section on messages), and $read_loop() reads continuously from the event loop (see the section on read loops).
 One read and one write may be in flight at the same time (for example a pending $read_async() while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several $write_async() calls send their data in call order and several $read_async() calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.
 $client or $server (the other is NULL) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.
-Once the connection, or the client or server that owns it, is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, $client, and $server, raises a tailcat_closed error; nothing is kept from before. Timeouts (including timeout = 0, a poll) and errors are described in TailcatServer.
-Because of an upstream tailcat bug, $info() (and so $local_address and $remote_address) fails with tailcat_failure, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called $close_write()). $print() and $format() avoid this by leaving the endpoints out once $close_write() has succeeded on the connection."><meta property="og:description" content="A TCP stream or connected UDP flow between a TailcatClient and a TailcatServer. Connections are created by TailcatClient$dial() and TailcatListener$accept(), not directly.
+Once the connection, or the client or server that owns it, is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, $is_reading, $client, and $server, raises a tailcat_closed error; nothing is kept from before. Timeouts (including timeout = 0, a poll) and errors are described in TailcatServer."><meta property="og:description" content="A TCP stream or connected UDP flow between a TailcatClient and a TailcatServer. Connections are created by TailcatClient$dial() and TailcatListener$accept(), not directly.
 For TCP, reads may return fewer bytes than requested and $read() returns NULL at end of stream. For UDP, each read returns one datagram (possibly raw(0)) and each write sends one datagram of at most 1232 bytes (tailcat_udp_max_payload()). $write_message() and $read_message() send and receive delimited messages over TCP (see the section on messages), and $read_loop() reads continuously from the event loop (see the section on read loops).
 One read and one write may be in flight at the same time (for example a pending $read_async() while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several $write_async() calls send their data in call order and several $read_async() calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.
 $client or $server (the other is NULL) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.
-Once the connection, or the client or server that owns it, is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, $client, and $server, raises a tailcat_closed error; nothing is kept from before. Timeouts (including timeout = 0, a poll) and errors are described in TailcatServer.
-Because of an upstream tailcat bug, $info() (and so $local_address and $remote_address) fails with tailcat_failure, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called $close_write()). $print() and $format() avoid this by leaving the endpoints out once $close_write() has succeeded on the connection."><meta property="og:image" content="https://rundel.github.io/rtailcat/logo.svg"></head><body>
+Once the connection, or the client or server that owns it, is closed, every method other than $close(), $format(), and $print(), and every field other than $is_closed, $is_reading, $client, and $server, raises a tailcat_closed error; nothing is kept from before. Timeouts (including timeout = 0, a poll) and errors are described in TailcatServer."><meta property="og:image" content="https://rundel.github.io/rtailcat/logo.svg"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -51,8 +49,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 <p>For TCP, reads may return fewer bytes than requested and <code>$read()</code> returns <code>NULL</code> at end of stream. For UDP, each read returns one datagram (possibly <code>raw(0)</code>) and each write sends one datagram of at most 1232 bytes (<code><a href="tailcat_udp_max_payload.html">tailcat_udp_max_payload()</a></code>). <code>$write_message()</code> and <code>$read_message()</code> send and receive delimited messages over TCP (see the section on messages), and <code>$read_loop()</code> reads continuously from the event loop (see the section on read loops).</p>
 <p>One read and one write may be in flight at the same time (for example a pending <code>$read_async()</code> while writing). Further operations in the same direction wait their turn and run in the order they were started, for synchronous and asynchronous calls alike, so several <code>$write_async()</code> calls send their data in call order and several <code>$read_async()</code> calls receive consecutive chunks of the stream in call order. The wait counts toward each operation's timeout, and canceling or timing out an operation that is still waiting ends it without affecting the others.</p>
 <p><code>$client</code> or <code>$server</code> (the other is <code>NULL</code>) gives the object that owns the connection, the client that dialed it or the server whose listener accepted it.</p>
-<p>Once the connection, or the client or server that owns it, is closed, every method other than <code>$close()</code>, <code>$format()</code>, and <code>$print()</code>, and every field other than <code>$is_closed</code>, <code>$client</code>, and <code>$server</code>, raises a <code>tailcat_closed</code> error; nothing is kept from before. Timeouts (including <code>timeout = 0</code>, a poll) and errors are described in <a href="TailcatServer.html">TailcatServer</a>.</p>
-<p>Because of an upstream tailcat bug, <code>$info()</code> (and so <code>$local_address</code> and <code>$remote_address</code>) fails with <code>tailcat_failure</code>, and the Go runtime prints a stack trace to standard error, on a TCP connection whose two directions have both been shut down (both sides called <code>$close_write()</code>). <code>$print()</code> and <code>$format()</code> avoid this by leaving the endpoints out once <code>$close_write()</code> has succeeded on the connection.</p>
+<p>Once the connection, or the client or server that owns it, is closed, every method other than <code>$close()</code>, <code>$format()</code>, and <code>$print()</code>, and every field other than <code>$is_closed</code>, <code>$is_reading</code>, <code>$client</code>, and <code>$server</code>, raises a <code>tailcat_closed</code> error; nothing is kept from before. Timeouts (including <code>timeout = 0</code>, a poll) and errors are described in <a href="TailcatServer.html">TailcatServer</a>.</p>
     </div>
 
 
@@ -69,7 +66,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 
 
 <p><code>$read_loop(callback)</code> reads continuously, driven by the later event loop, and calls <code>callback(data)</code> on the main R thread with each chunk (TCP), each datagram (UDP), or with <code>messages = TRUE</code> each message. It is the reading counterpart of <code>TailcatListener$serve()</code> and makes progress under the same conditions: while R is idle at the console, inside Shiny or httpuv, or while a script runs the event loop (see <code><a href="tailcat_wait.html">tailcat_run()</a></code>). If <code>callback</code> returns a promise, the next read starts after it settles, so data is handled in order and a slow callback slows down reading rather than piling up work.</p>
-<p>The loop ends when the peer ends a TCP stream (<code>on_end</code> is then called), when the connection or its owner is closed, or when <code>$stop_reading()</code> is called; the last two end it quietly. If a read fails or the callback fails, <code>on_error</code> is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.</p>
+<p>The loop ends when the peer ends a TCP stream (<code>on_end</code> is then called), when the connection or its owner is closed, or when <code>$stop_reading()</code> is called; the last two end it quietly. <code>$is_reading</code> tells whether a loop is running. If a read fails or the callback fails, <code>on_error</code> is called, the loop stops, and the connection is closed. While a read loop runs, other reads on the connection would interleave with it, so only write.</p>
     </div>
     <div class="section level2">
     <h2 id="active-bindings">Active bindings<a class="anchor" aria-label="anchor" href="#active-bindings"></a></h2>
@@ -91,6 +88,10 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 
     <dt><code>server</code></dt>
 <dd><p>The <a href="TailcatServer.html">TailcatServer</a> whose listener accepted the connection, or <code>NULL</code> for a dialed connection. It keeps working after the connection is closed.</p></dd>
+
+
+    <dt><code>is_reading</code></dt>
+<dd><p><code>TRUE</code> while a read loop started by <code>$read_loop()</code> is running, <code>FALSE</code> otherwise, including once the connection is closed.</p></dd>
 
 
     <dt><code>is_closed</code></dt>
@@ -121,7 +122,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 <li><p><a href="#method-TailcatConnection-write_async"><code>TailcatConnection$write_async()</code></a></p></li>
 <li><p><a href="#method-TailcatConnection-close_write"><code>TailcatConnection$close_write()</code></a></p></li>
 <li><p><a href="#method-TailcatConnection-close_write_async"><code>TailcatConnection$close_write_async()</code></a></p></li>
-<li><p><a href="#method-TailcatConnection-readable"><code>TailcatConnection$readable()</code></a></p></li>
+<li><p><a href="#method-TailcatConnection-is_readable"><code>TailcatConnection$is_readable()</code></a></p></li>
 <li><p><a href="#method-TailcatConnection-info"><code>TailcatConnection$info()</code></a></p></li>
 <li><p><a href="#method-TailcatConnection-info_async"><code>TailcatConnection$info_async()</code></a></p></li>
 <li><p><a href="#method-TailcatConnection-close"><code>TailcatConnection$close()</code></a></p></li>
@@ -325,7 +326,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-6">Returns<a class="anchor" aria-label="anchor" href="#returns-6"></a></h4>
-<p>The number of bytes in the message, not counting its length prefix, invisibly.</p>
+<p>The connection, invisibly.</p>
 </div>
 
 </div>
@@ -347,7 +348,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-7">Returns<a class="anchor" aria-label="anchor" href="#returns-7"></a></h4>
-<p>A promise resolving with the number of bytes in the message.</p>
+<p>A promise resolving with the connection.</p>
 </div>
 
 </div>
@@ -466,7 +467,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 
 <p></p><hr><a id="method-TailcatConnection-write"></a><div class="section">
 <h3 id="tailcatconnection-write-"><code>TailcatConnection$write()</code><a class="anchor" aria-label="anchor" href="#tailcatconnection-write-"></a></h3>
-<p>Write all of <code>data</code>. On timeout or error the condition's <code>bytes</code> field gives the number of bytes already sent.</p><div class="section">
+<p>Write all of <code>data</code>: the call returns once everything has been sent, or raises. On timeout or error the condition's <code>bytes</code> field gives the number of bytes already sent.</p><div class="section">
 <h4 id="usage-13">Usage<a class="anchor" aria-label="anchor" href="#usage-13"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatConnection</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="va">data</span>, timeout <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
@@ -481,7 +482,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-12">Returns<a class="anchor" aria-label="anchor" href="#returns-12"></a></h4>
-<p>The number of bytes written (an integer, or a double beyond the integer range), invisibly.</p>
+<p>The connection, invisibly, so that calls chain (<code>conn$write(data)$close_write()</code>).</p>
 </div>
 
 </div>
@@ -503,7 +504,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-13">Returns<a class="anchor" aria-label="anchor" href="#returns-13"></a></h4>
-<p>A promise resolving with the number of bytes written.</p>
+<p>A promise resolving with the connection.</p>
 </div>
 
 </div>
@@ -546,11 +547,11 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 
 </div>
 
-<p></p><hr><a id="method-TailcatConnection-readable"></a><div class="section">
-<h3 id="tailcatconnection-readable-"><code>TailcatConnection$readable()</code><a class="anchor" aria-label="anchor" href="#tailcatconnection-readable-"></a></h3>
+<p></p><hr><a id="method-TailcatConnection-is_readable"></a><div class="section">
+<h3 id="tailcatconnection-is-readable-"><code>TailcatConnection$is_readable()</code><a class="anchor" aria-label="anchor" href="#tailcatconnection-is-readable-"></a></h3>
 <p>Check without waiting whether a TCP read would return immediately (buffered data, end of stream, or a pending error). Intended for checking idle connections, not as a readiness loop.</p><div class="section">
 <h4 id="usage-17">Usage<a class="anchor" aria-label="anchor" href="#usage-17"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatConnection</span><span class="op">$</span><span class="fu">readable</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatConnection</span><span class="op">$</span><span class="fu">is_readable</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-16">Returns<a class="anchor" aria-label="anchor" href="#returns-16"></a></h4>
 <p><code>TRUE</code> or <code>FALSE</code>.</p>
@@ -560,7 +561,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
 
 <p></p><hr><a id="method-TailcatConnection-info"></a><div class="section">
 <h3 id="tailcatconnection-info-"><code>TailcatConnection$info()</code><a class="anchor" aria-label="anchor" href="#tailcatconnection-info-"></a></h3>
-<p>Information about the connection. Because of an upstream tailcat bug it fails with <code>tailcat_failure</code> once both directions of a TCP connection have been shut down.</p><div class="section">
+<p>Information about the connection.</p><div class="section">
 <h4 id="usage-18">Usage<a class="anchor" aria-label="anchor" href="#usage-18"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">TailcatConnection</span><span class="op">$</span><span class="fu">info</span><span class="op">(</span>timeout <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
@@ -650,8 +651,7 @@ Because of an upstream tailcat bug, $info() (and so $local_address and $remote_a
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="va">conn</span> <span class="op">=</span> <span class="va"><a href="TailcatClient.html">TailcatClient</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">address</span><span class="op">)</span><span class="op">$</span><span class="fu">dial</span><span class="op">(</span><span class="fl">8080</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="st">"ping"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">write</span><span class="op">(</span><span class="st">"ping"</span><span class="op">)</span><span class="op">$</span><span class="fu">close_write</span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">conn</span><span class="op">$</span><span class="fu">read_all</span><span class="op">(</span>timeout <span class="op">=</span> <span class="fl">10</span>, as <span class="op">=</span> <span class="st">"text"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

@@ -35,10 +35,12 @@ Everything else sees the plain string:
 [`identical()`](https://rdrr.io/r/base/identical.html) on the unclassed
 value. A secret can be passed directly wherever this package expects an
 address or key, such as `TailcatClient$new()` and `TailcatServer$new()`.
-Functions that drop attributes, such as
-[`c()`](https://rdrr.io/r/base/c.html),
-[`unlist()`](https://rdrr.io/r/base/unlist.html), and subsetting with
-`[`, return the plain string too.
+Subsetting a secret with `[` or `[[`, and combining with
+[`c()`](https://rdrr.io/r/base/c.html) when the first argument is a
+secret, give a secret again, so they stay redacted. Functions that drop
+attributes, such as [`unlist()`](https://rdrr.io/r/base/unlist.html) on
+a list of secrets or [`c()`](https://rdrr.io/r/base/c.html) with a plain
+string first, return the plain string.
 
 Redaction only protects against accidental display.
 [`dput()`](https://rdrr.io/r/base/dput.html),
@@ -65,6 +67,15 @@ str(object, ...)
 # S3 method for class 'tailcat_secret'
 toString(x, ...)
 
+# S3 method for class 'tailcat_secret'
+x[...]
+
+# S3 method for class 'tailcat_secret'
+x[[...]]
+
+# S3 method for class 'tailcat_secret'
+c(...)
+
 # S3 method for class 'tailcat_info'
 format(x, ...)
 
@@ -84,11 +95,14 @@ str(object, ...)
 
 - ...:
 
-  Ignored.
+  Ignored by the display methods. For `[` and `[[`, the index; for
+  [`c()`](https://rdrr.io/r/base/c.html), the secrets or strings to
+  combine.
 
 ## Value
 
-[`format()`](https://rdrr.io/r/base/format.html) and
+`[`, `[[`, and [`c()`](https://rdrr.io/r/base/c.html) return a
+`tailcat_secret`; [`format()`](https://rdrr.io/r/base/format.html) and
 [`toString()`](https://rdrr.io/r/base/toString.html) return
 `"<redacted>"` for each element of a secret;
 [`format()`](https://rdrr.io/r/base/format.html) of a `tailcat_info`
@@ -106,7 +120,7 @@ keys$private_key
 str(keys)
 #> List of 3 (class tailcat_keys)
 #>  $ private_key  : <tailcat_secret> <redacted> 
-#>  $ public_key   : chr "nodekey:dd678a22d5069dd017c4da52ee328e6b0578865f71a1fe49db2d7bd8459ead11" 
+#>  $ public_key   : chr "nodekey:7af5c1a59ca944d5674db146fa73de387ac2d2e4f2b23b71e69e441e92a06602" 
 #>  $ preshared_key: <tailcat_secret> <redacted> 
 nchar(keys$private_key) > 0
 #> [1] TRUE

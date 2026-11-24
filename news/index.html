@@ -51,9 +51,15 @@
 <code><a href="../reference/tailcat_keys_save.html">tailcat_keys_save()</a></code>, <code><a href="../reference/tailcat_keys_save.html">tailcat_keys_load()</a></code>, and <code>tailcat_keygen(path)</code> keep keys in a JSON file that only the owner can read, and <code><a href="../reference/tailcat_address_write.html">tailcat_address_write()</a></code> and <code><a href="../reference/tailcat_address_write.html">tailcat_address_read()</a></code> do the same for an address. <code><a href="../reference/tailcat_reveal.html">tailcat_reveal()</a></code> returns the plain string of a <code>tailcat_secret</code> where an application means to show it.</li>
 <li>
 <code>$close(drain = )</code> on servers and clients waits for TCP shutdown traffic before closing.</li>
+<li>Methods and functions that change an object return it invisibly, so calls chain: <code>conn$write(data)$close_write()$read_all()</code>. This includes <code>$write()</code> and <code>$write_message()</code>, which return the connection rather than a byte count (their <code>_async()</code> twins resolve with it), and <code><a href="../reference/tailcat_keys_save.html">tailcat_keys_save()</a></code> and <code><a href="../reference/tailcat_address_write.html">tailcat_address_write()</a></code>, which return their first argument.</li>
+<li>
+<code>TailcatListener$is_serving</code> and <code>TailcatConnection$is_reading</code> tell whether a <code>$serve()</code> or <code>$read_loop()</code> loop is running, and <code>TailcatConnection$is_readable()</code> whether a TCP read would return at once.</li>
+<li>
+<code>allowed_clients</code> and <code>$allow_client()</code> take <code>tailcat_keys</code> objects as well as public key strings.</li>
+<li>Subsetting a <code>tailcat_secret</code> with <code>[</code> or <code>[[</code>, and combining with <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code>, keep it a secret. <code><a href="../reference/tailcat_build_info.html">tailcat_build_info()</a></code> prints as a short summary.</li>
 <li>
 <code><a href="../reference/tailcat_wait.html">tailcat_wait()</a></code> and <code><a href="../reference/tailcat_wait.html">tailcat_run()</a></code> run the later event loop from a script, until a promise settles or a condition holds.</li>
-<li>The options <code>rtailcat.region</code> and <code>rtailcat.derp_map_url</code> set the relay for servers and clients created without those arguments.</li>
+<li>The options <code>rtailcat.region</code> and <code>rtailcat.relay_map_url</code> set the relay for servers and clients created without those arguments.</li>
 <li>
 <code><a href="../reference/tailcat_udp_max_payload.html">tailcat_udp_max_payload()</a></code> gives the largest UDP datagram (1232 bytes).</li>
 </ul></div>
@@ -63,7 +69,9 @@
 <code>timeout = 0</code> is a non-blocking poll (data already received, a connection already waiting) rather than an already expired deadline.</li>
 <li>
 <code>TailcatClient$ping()</code> returns seconds rather than milliseconds, like <code>$disco_ping()</code> and the timeouts.</li>
-<li>Field names in the results of <code>$info()</code>, <code>$disco_ping()</code>, and <code><a href="../reference/tailcat_address_parse.html">tailcat_address_parse()</a></code> are snake_case (<code>relay_port</code>, <code>relay_region_id</code>, and so on) instead of tailcat’s JSON names; <code>tailcat_build_info()$raw</code> keeps Go’s own names.</li>
+<li>
+<code>TailcatClient$disco_ping()</code> reports a ping that went through a relay as <code>direct = FALSE</code> with <code>endpoint = NA</code>, rather than as an empty <code>endpoint</code>.</li>
+<li>Field names in the results of <code>$info()</code>, <code>$disco_ping()</code>, and <code><a href="../reference/tailcat_address_parse.html">tailcat_address_parse()</a></code> are snake_case (<code>relay_port</code>, <code>relay_region_id</code>, and so on) instead of tailcat’s JSON names, and the relay map argument and option are <code>relay_map_url</code> and <code>rtailcat.relay_map_url</code> rather than <code>derp_map_url</code>; <code>tailcat_build_info()$raw</code> keeps Go’s own names.</li>
 </ul></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

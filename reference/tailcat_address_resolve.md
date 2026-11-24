@@ -8,9 +8,9 @@ still needs network access. The result is a secret, like the input.
 ## Usage
 
 ``` r
-tailcat_address_resolve(address, derp_map_url = NULL, timeout = 30)
+tailcat_address_resolve(address, relay_map_url = NULL, timeout = 30)
 
-tailcat_address_resolve_async(address, derp_map_url = NULL, timeout = 30)
+tailcat_address_resolve_async(address, relay_map_url = NULL, timeout = 30)
 ```
 
 ## Arguments
@@ -22,10 +22,10 @@ tailcat_address_resolve_async(address, derp_map_url = NULL, timeout = 30)
   returned by `TailcatServer$address`. Surrounding whitespace is
   ignored. Addresses are secrets.
 
-- derp_map_url:
+- relay_map_url:
 
   URL of a relay map to use instead of the default, or `NULL` to use the
-  `rtailcat.derp_map_url` option (see the section on relay options in
+  `rtailcat.relay_map_url` option (see the section on relay options in
   [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md))
   or, when that is unset, the default.
 

@@ -55,9 +55,9 @@ writes them to a file only you can read.
 keys = tailcat_keygen()
 keys
 #> <tailcat_keys>
-#>   public_key:    nodekey:16d3ddfbac9f4e988fb9db4d4a8aa6c3f94bf9d9191094be04f314ff268c5f6c
+#>   public_key:    nodekey:8aead8c654cbc7a51dad2cfad232e622041e9c0f897182e9f1b69d8f0d1bd468
 #>   private_key:   <redacted>
 #>   preshared_key: <redacted>
 keys$public_key
-#> [1] "nodekey:16d3ddfbac9f4e988fb9db4d4a8aa6c3f94bf9d9191094be04f314ff268c5f6c"
+#> [1] "nodekey:8aead8c654cbc7a51dad2cfad232e622041e9c0f897182e9f1b69d8f0d1bd468"
 ```

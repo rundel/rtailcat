@@ -79,7 +79,7 @@ Create a client. No network access happens until it is used.
 
 #### Usage
 
-    TailcatClient$new(address, key = NULL, derp_map_url = NULL)
+    TailcatClient$new(address, key = NULL, relay_map_url = NULL)
 
 #### Arguments
 
@@ -98,10 +98,10 @@ Create a client. No network access happens until it is used.
   or `NULL` to generate one. A stable key gives the client a stable
   public key, for use with `allowed_clients`.
 
-- `derp_map_url`:
+- `relay_map_url`:
 
   URL of a relay map to use instead of the default, or `NULL` to use the
-  `rtailcat.derp_map_url` option (see the section on relay options in
+  `rtailcat.relay_map_url` option (see the section on relay options in
   [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md))
   or, when that is unset, the default.
 
@@ -228,9 +228,12 @@ Send a discovery ping, which also triggers direct path discovery.
 
 #### Returns
 
-A list with `latency` (seconds), `endpoint` (the direct path, or `""`
-when relayed), `relay_region_id`, and `relay_region_code` (the relay
-region the ping went through).
+A list with `latency` (seconds), `direct` (`TRUE` if the ping took a
+direct path to the server, `FALSE` if it went through a relay),
+`endpoint` (the direct path as `"host:port"`, or `NA` when relayed),
+`relay_region_id`, and `relay_region_code` (the relay region the ping
+went through). tailcat's C ABI reports a relayed ping as an empty
+`endpoint`.
 
 ------------------------------------------------------------------------
 
@@ -404,11 +407,9 @@ Print the summary from `$format()`.
 ``` r
 if (FALSE) { # \dontrun{
 address = readLines("address.txt")
-cli = TailcatClient$new(address)
-conn = cli$dial(8080)
-conn$write("hello\n")
-conn$close()
-cli$drain()
-cli$close()
+cl = TailcatClient$new(address)
+conn = cl$dial(8080)
+conn$write("hello\n")$close()
+cl$close(drain = 5)
 } # }
 ```

@@ -10,9 +10,9 @@ open, while closing the server closes everything.
 
 Once the listener or its server is closed, every method other than
 `$close()`, `$stop_serving()`, `$format()`, and `$print()`, and every
-field other than `$is_closed` and `$server`, raises a `tailcat_closed`
-error. Timeouts (including `timeout = 0`, a poll) and errors are
-described in
+field other than `$is_closed`, `$is_serving`, and `$server`, raises a
+`tailcat_closed` error. Timeouts (including `timeout = 0`, a poll) and
+errors are described in
 [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md).
 
 ## Serving connections
@@ -34,7 +34,7 @@ The loop does not wait for the promise before accepting the next
 connection. The loop ends quietly when the listener or the server is
 closed, or when `$stop_serving()` is called; `$stop_serving()` leaves
 the listener open, so it can accept connections again or serve with a
-new handler.
+new handler. `$is_serving` tells whether a loop is running.
 
 ## Active bindings
 
@@ -55,6 +55,11 @@ new handler.
 
   The owning
   [TailcatServer](https://rundel.github.io/rtailcat/reference/TailcatServer.md).
+
+- `is_serving`:
+
+  `TRUE` while an accept loop started by `$serve()` is running, `FALSE`
+  otherwise, including once the listener is closed.
 
 - `is_closed`:
 
@@ -304,8 +309,7 @@ srv = TailcatServer$new()
 lst = srv$listen(7)
 lst$serve(function(conn) {
   promises::then(conn$read_all_async(timeout = 30), function(data) {
-    conn$write(data)
-    conn$close()
+    conn$write(data)$close()
   })
 })
 srv$address

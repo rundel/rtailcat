@@ -76,8 +76,8 @@ Once a server is closed, every method other than $close(), $format(), and $print
     <h2 id="relay-options">Relay options<a class="anchor" aria-label="anchor" href="#relay-options"></a></h2>
 
 
-<p>The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every <code>$new()</code> (including calls inside other packages' code). The option <code>rtailcat.region</code> is used by <code>TailcatServer$new()</code> when <code>region</code> is <code>NULL</code>, and <code>rtailcat.derp_map_url</code> by <code>TailcatServer$new()</code>, <code>TailcatClient$new()</code>, and <code><a href="tailcat_address_resolve.html">tailcat_address_resolve()</a></code> when <code>derp_map_url</code> is <code>NULL</code>. They take the same values as the arguments, are read when the object is created, and are ignored when unset (<code>NULL</code>, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.</p>
-<p>For example, a deployment that runs its own relay region can call <code>options(rtailcat.region = region)</code> at startup, and one that publishes its own relay map <code>options(rtailcat.derp_map_url = url)</code>.</p>
+<p>The relay used by servers and clients can be set once for the R session with options, instead of passing the same arguments to every <code>$new()</code> (including calls inside other packages' code). The option <code>rtailcat.region</code> is used by <code>TailcatServer$new()</code> when <code>region</code> is <code>NULL</code>, and <code>rtailcat.relay_map_url</code> by <code>TailcatServer$new()</code>, <code>TailcatClient$new()</code>, and <code><a href="tailcat_address_resolve.html">tailcat_address_resolve()</a></code> when <code>relay_map_url</code> is <code>NULL</code>. They take the same values as the arguments, are read when the object is created, and are ignored when unset (<code>NULL</code>, the default). An argument given explicitly always wins; to go back to the default relays, unset the option.</p>
+<p>For example, a deployment that runs its own relay region can call <code>options(rtailcat.region = region)</code> at startup, and one that publishes its own relay map <code>options(rtailcat.relay_map_url = url)</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="active-bindings">Active bindings<a class="anchor" aria-label="anchor" href="#active-bindings"></a></h2>
@@ -86,7 +86,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 
 
     <dt><code>public_key</code></dt>
-<dd><p>The server's public key, or <code>NA</code> before the server has started.</p></dd>
+<dd><p>The server's public key. Errors if the server has not started, like <code>$address</code>; test <code>$is_started</code> first when that is in doubt.</p></dd>
 
 
     <dt><code>is_started</code></dt>
@@ -127,7 +127,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 <span>  preshared_key <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  region_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  region <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  derp_map_url <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  relay_map_url <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  allowed_clients <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  udp_idle_timeout <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div><p></p></div>
@@ -145,11 +145,11 @@ Once a server is closed, every method other than $close(), $format(), and $print
       <dt><code>region</code></dt>
 <dd><p>A relay region definition, as a list or a JSON string, to use instead of the public relay map, or <code>NULL</code> to use the <code>rtailcat.region</code> option (see the section on relay options) or, when that is unset, the public relays. Field names may be the snake_case names used by <code><a href="tailcat_address_parse.html">tailcat_address_parse()</a></code> (<code>region_id</code>, <code>region_code</code>, <code>nodes</code>, and within each node <code>name</code>, <code>host_name</code>, <code>ipv4</code>, <code>relay_port</code>, and so on) or the PascalCase names of Tailscale's <code>DERPRegion</code> type (<code>RegionID</code>, <code>Nodes</code>, <code>HostName</code>, <code>DERPPort</code>, and so on).</p></dd>
 
-      <dt><code>derp_map_url</code></dt>
-<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.derp_map_url</code> option (see the section on relay options in TailcatServer) or, when that is unset, the default.</p></dd>
+      <dt><code>relay_map_url</code></dt>
+<dd><p>URL of a relay map to use instead of the default, or <code>NULL</code> to use the <code>rtailcat.relay_map_url</code> option (see the section on relay options in TailcatServer) or, when that is unset, the default.</p></dd>
 
       <dt><code>allowed_clients</code></dt>
-<dd><p>Character vector of client public keys. If given, only these clients may connect; otherwise anyone with the address may.</p></dd>
+<dd><p>The clients that may connect: a character vector of client public keys, a <code>tailcat_keys</code> object from <code><a href="tailcat_keygen.html">tailcat_keygen()</a></code> (whose public key is used), or a list of public keys and <code>tailcat_keys</code> objects. If given, only these clients may connect; otherwise anyone with the address may.</p></dd>
 
       <dt><code>udp_idle_timeout</code></dt>
 <dd><p>Seconds after which an idle UDP flow is dropped, or <code>NULL</code> for the default.</p></dd>
@@ -256,7 +256,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 </div><p></p><div class="section">
 <h4 id="arguments-5">Arguments<a class="anchor" aria-label="anchor" href="#arguments-5"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>public_key</code></dt>
-<dd><p>A client public key, for example <code>TailcatClient$public_key</code>.</p></dd>
+<dd><p>A client public key, for example <code>TailcatClient$public_key</code>, or the client's <code>tailcat_keys</code> object from <code><a href="tailcat_keygen.html">tailcat_keygen()</a></code>, whose public key is used.</p></dd>
 
       <dt><code>timeout</code></dt>
 <dd><p>Seconds to wait; <code>Inf</code> waits indefinitely and <code>0</code> polls.</p></dd>
@@ -278,7 +278,7 @@ Once a server is closed, every method other than $close(), $format(), and $print
 </div><p></p><div class="section">
 <h4 id="arguments-6">Arguments<a class="anchor" aria-label="anchor" href="#arguments-6"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>public_key</code></dt>
-<dd><p>A client public key.</p></dd>
+<dd><p>A client public key or <code>tailcat_keys</code> object, as for <code>$allow_client()</code>.</p></dd>
 
       <dt><code>timeout</code></dt>
 <dd><p>Seconds to wait; <code>Inf</code> waits indefinitely and <code>0</code> polls.</p></dd>

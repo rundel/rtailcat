@@ -35,7 +35,7 @@ require (
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55 // indirect
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
-	github.com/tailscale/tailcat v0.7.1-0.20261119042437-c14b171db436 // indirect
+	github.com/tailscale/tailcat v0.8.0 // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea // indirect
 	github.com/tailscale/wireguard-go v0.0.0-20261117232807-a1800e9c5305 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect

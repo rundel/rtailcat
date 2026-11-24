@@ -21,3 +21,4 @@
 ^air\.toml$
 ^\.lintr$
 ^logo$
+^vignettes/\.quarto$
